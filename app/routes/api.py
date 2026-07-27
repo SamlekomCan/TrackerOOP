@@ -13,6 +13,9 @@ from app.models import (
     RateOverride,
     SavedFilter,
     Client,
+    Epic,
+    Story,
+    Role,
 )
 from datetime import datetime, timedelta, time
 from app.utils.db import safe_commit
@@ -1047,6 +1050,52 @@ def calendar_events():
             }
         )
 
+    # Admin/Manager: also surface PO check-in activities that have a specific time set
+    # (e.g. a meeting logged via Check-In), so leadership can see team activity on their own calendar.
+    is_admin_or_manager = (
+        current_user.is_admin or current_user.role == "manager" or "manager" in current_user.get_role_names()
+    )
+    if is_admin_or_manager and include_tasks:
+        po_user_ids = [u.id for u in User.query.join(User.roles).filter(Role.name == "po").all()]
+        if po_user_ids:
+            po_checkin_tasks = Task.query.filter(
+                Task.assigned_to.in_(po_user_ids),
+                Task.source == "check_in",
+                Task.due_time.isnot(None),
+                Task.due_date.isnot(None),
+                Task.due_date >= start_dt.date(),
+                Task.due_date <= end_dt.date(),
+            ).all()
+
+            for t in po_checkin_tasks:
+                assignee_name = t.assigned_user.display_name if t.assigned_user else _("PO")
+                tasks.append(
+                    {
+                        "id": t.id,
+                        "title": f"{assignee_name}: {t.name} ({t.due_time.strftime('%H:%M')})",
+                        "start": t.due_date.isoformat(),
+                        "end": t.due_date.isoformat(),
+                        "allDay": True,
+                        "editable": False,
+                        "backgroundColor": "#0ea5e9",
+                        "borderColor": "#0ea5e9",
+                        "extendedProps": {
+                            "id": t.id,
+                            "title": t.name,
+                            "description": t.description,
+                            "dueDate": t.due_date.isoformat(),
+                            "dueTime": t.due_time.strftime("%H:%M"),
+                            "status": t.status,
+                            "priority": t.priority,
+                            "projectId": t.project_id,
+                            "type": "task",
+                            "item_type": "task",
+                            "isPoActivity": True,
+                            "assigneeName": assignee_name,
+                        },
+                    }
+                )
+
     # Format calendar events
     events = []
     for ev in result.get("events", []):
@@ -1071,6 +1120,67 @@ def calendar_events():
         {
             "events": all_items,
             "summary": {"calendar_events": len(events), "tasks": len(tasks), "time_entries": len(time_entries)},
+        }
+    )
+
+
+@api_bp.route("/api/calendar/day-po-tasks")
+@login_required
+def calendar_day_po_tasks():
+    """Return all PO-role tasks due on a given date, for Admin/Manager oversight.
+
+    Split into 'meetings' (tasks with a due_time set, e.g. via Check-In) and
+    'other_tasks' (no specific time), meetings first.
+    """
+    is_admin_or_manager = (
+        current_user.is_admin or current_user.role == "manager" or "manager" in current_user.get_role_names()
+    )
+    if not is_admin_or_manager:
+        return jsonify({"error": "Forbidden"}), 403
+
+    date_str = request.args.get("date", "").strip()
+    try:
+        target_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+    except ValueError:
+        return jsonify({"error": "date must be in YYYY-MM-DD format"}), 400
+
+    po_user_ids = [u.id for u in User.query.join(User.roles).filter(Role.name == "po").all()]
+
+    meetings = []
+    other_tasks = []
+
+    if po_user_ids:
+        po_tasks = (
+            Task.query.filter(
+                Task.assigned_to.in_(po_user_ids),
+                Task.due_date == target_date,
+            )
+            .order_by(Task.due_time.asc().nulls_last(), Task.name.asc())
+            .all()
+        )
+
+        for t in po_tasks:
+            assignee_name = t.assigned_user.display_name if t.assigned_user else _("PO")
+            item = {
+                "id": t.id,
+                "name": t.name,
+                "description": t.description,
+                "status": t.status,
+                "priority": t.priority,
+                "assigneeName": assignee_name,
+                "dueTime": t.due_time.strftime("%H:%M") if t.due_time else None,
+                "url": f"/tasks/{t.id}",
+            }
+            if t.due_time:
+                meetings.append(item)
+            else:
+                other_tasks.append(item)
+
+    return jsonify(
+        {
+            "date": target_date.isoformat(),
+            "meetings": meetings,
+            "other_tasks": other_tasks,
         }
     )
 
@@ -1237,6 +1347,24 @@ def get_project_tasks(project_id):
                 }
                 for task in tasks
             ],
+        }
+    )
+
+
+@api_bp.route("/api/epics/<int:epic_id>/stories")
+@login_required
+def get_epic_stories(epic_id):
+    """Get open stories for a specific epic (used by the Check-In cascading dropdown)"""
+    epic = Epic.query.get(epic_id)
+    if not epic:
+        return jsonify({"error": "Epic not found"}), 404
+
+    stories = Story.query.filter_by(epic_id=epic_id, status="open").order_by(Story.name).all()
+
+    return jsonify(
+        {
+            "success": True,
+            "stories": [{"id": story.id, "name": story.name} for story in stories],
         }
     )
 

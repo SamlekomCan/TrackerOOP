@@ -103,6 +103,12 @@ DEFAULT_PERMISSIONS = [
         "description": "Create, edit, and manage purchase orders",
         "category": "inventory",
     },
+    # Trending Issue Permissions
+    {
+        "name": "manage_trending_issues",
+        "description": "Create, edit, and delete trending issues",
+        "category": "trending_issues",
+    },
 ]
 
 
@@ -176,6 +182,7 @@ DEFAULT_ROLES = {
             "approve_stock_adjustments",
             "manage_suppliers",
             "manage_purchase_orders",
+            "manage_trending_issues",
         ],
     },
     "manager": {
@@ -221,6 +228,8 @@ DEFAULT_ROLES = {
             "view_stock_history",
             "manage_stock_reservations",
             "view_inventory_reports",
+            # Trending Issues
+            "manage_trending_issues",
         ],
     },
     "user": {
@@ -262,6 +271,28 @@ DEFAULT_ROLES = {
             "view_own_invoices",
             "view_own_reports",
             # Inventory
+            "view_inventory",
+            "view_stock_levels",
+        ],
+    },
+    "po": {
+        "description": "Product Owner",
+        "is_system_role": True,
+        "permissions": [
+            # Baseline permission set (same as "user") - can be refined later
+            "view_own_time_entries",
+            "create_time_entries",
+            "edit_own_time_entries",
+            "delete_own_time_entries",
+            "view_projects",
+            "view_own_tasks",
+            "create_tasks",
+            "edit_own_tasks",
+            "delete_own_tasks",
+            "view_clients",
+            "view_own_invoices",
+            "view_own_reports",
+            "export_reports",
             "view_inventory",
             "view_stock_levels",
         ],

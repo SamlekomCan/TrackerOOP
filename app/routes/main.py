@@ -1,7 +1,20 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session, jsonify
 from flask_login import login_required, current_user
-from app.models import User, Project, TimeEntry, Settings, WeeklyTimeGoal, TimeEntryTemplate, Activity
+from app.models import (
+    User,
+    Project,
+    TimeEntry,
+    Settings,
+    WeeklyTimeGoal,
+    TimeEntryTemplate,
+    Activity,
+    Task,
+    Epic,
+    Story,
+    TrendingIssue,
+)
 from datetime import datetime, timedelta
+from app.utils.timezone import now_in_app_timezone
 import pytz
 from app import db, track_page_view
 from sqlalchemy import text
@@ -40,11 +53,32 @@ def dashboard():
     # Get user's active timer
     active_timer = current_user.active_timer
 
-    # Get recent entries for the user (using repository to avoid N+1)
-    from app.repositories import TimeEntryRepository
+    # Get the user's checked-in tasks for the Upcoming Task widget
+    from sqlalchemy.orm import joinedload
 
-    time_entry_repo = TimeEntryRepository()
-    recent_entries = time_entry_repo.get_by_user(user_id=current_user.id, limit=10, include_relations=True)
+    upcoming_checkin_tasks = (
+        Task.query.filter(
+            Task.source == "check_in",
+            Task.assigned_to == current_user.id,
+            Task.status.in_(["todo", "in_progress"]),
+        )
+        .options(joinedload(Task.story).joinedload(Story.epic))
+        .order_by(Task.due_date.asc().nulls_last())
+        .limit(10)
+        .all()
+    )
+
+    # Get active epics for the Check-In Epic -> Story dropdown
+    epics = (
+        Epic.query.filter_by(status="active")
+        .order_by(Epic.next_follow_up_date.asc().nulls_first(), Epic.deadline_date.asc().nulls_last())
+        .all()
+    )
+
+    # Get trending issues for the dashboard box (open ones first, most recent)
+    trending_issues = (
+        TrendingIssue.query.order_by(TrendingIssue.status.asc(), TrendingIssue.created_at.desc()).limit(5).all()
+    )
 
     # Get active projects for timer dropdown (using repository)
     from app.repositories import ProjectRepository, ClientRepository
@@ -105,29 +139,9 @@ def dashboard():
     # Get recent activities for activity feed widget
     recent_activities = Activity.get_recent(user_id=None if current_user.is_admin else current_user.id, limit=10)
 
-    # Get user stats for smart banner and donation widget
-    try:
-        from app.models import DonationInteraction
-        user_stats = DonationInteraction.get_user_engagement_metrics(current_user.id)
-    except Exception:
-        # Fallback if table doesn't exist yet
-        days_since_signup = (datetime.utcnow() - current_user.created_at).days if current_user.created_at else 0
-        time_entries_count = TimeEntry.query.filter_by(user_id=current_user.id).count()
-        total_hours = current_user.total_hours if hasattr(current_user, "total_hours") else 0.0
-        user_stats = {
-            "days_since_signup": days_since_signup,
-            "time_entries_count": time_entries_count,
-            "total_hours": total_hours,
-        }
-    
-    # Get donation widget stats (separate from user_stats for clarity)
-    time_entries_count = user_stats.get("time_entries_count", 0)
-    total_hours = user_stats.get("total_hours", 0.0)
-    
     # Prepare template data
     template_data = {
         "active_timer": active_timer,
-        "recent_entries": recent_entries,
         "active_projects": active_projects,
         "active_clients": active_clients,
         "today_hours": today_hours,
@@ -137,9 +151,11 @@ def dashboard():
         "current_week_goal": current_week_goal,
         "templates": templates,
         "recent_activities": recent_activities,
-        "user_stats": user_stats,  # For smart banner
-        "time_entries_count": time_entries_count,  # For donation widget
-        "total_hours": total_hours,  # For donation widget
+        "upcoming_checkin_tasks": upcoming_checkin_tasks,
+        "today_iso": now_in_app_timezone().date().isoformat(),
+        "today": now_in_app_timezone().date(),
+        "epics": epics,
+        "trending_issues": trending_issues,
     }
 
     # Cache for 5 minutes
@@ -174,93 +190,6 @@ def about():
 def help():
     """Help page"""
     return render_template("main/help.html")
-
-
-@main_bp.route("/donate")
-@login_required
-def donate():
-    """Donation page explaining why donations are important"""
-    from app.models import TimeEntry
-    
-    # Get user engagement metrics
-    days_since_signup = (datetime.utcnow() - current_user.created_at).days if current_user.created_at else 0
-    time_entries_count = TimeEntry.query.filter_by(user_id=current_user.id).count()
-    total_hours = current_user.total_hours if hasattr(current_user, "total_hours") else 0.0
-    
-    # Record page view (only if table exists)
-    try:
-        from app.models import DonationInteraction
-        DonationInteraction.record_interaction(
-            user_id=current_user.id,
-            interaction_type="page_viewed",
-            source="donate_page",
-            user_metrics={
-                "days_since_signup": days_since_signup,
-                "time_entries_count": time_entries_count,
-                "total_hours": total_hours,
-            }
-        )
-    except Exception:
-        # Don't fail if tracking fails (e.g., table doesn't exist yet)
-        pass
-    
-    return render_template(
-        "main/donate.html",
-        days_since_signup=days_since_signup,
-        time_entries_count=time_entries_count,
-        total_hours=total_hours,
-    )
-
-
-@main_bp.route("/donate/track-click", methods=["POST"])
-@login_required
-def track_donation_click():
-    """Track donation link clicks"""
-    try:
-        from app.models import DonationInteraction
-        
-        data = request.get_json() or {}
-        source = data.get("source", "unknown")
-        
-        # Get user metrics
-        metrics = DonationInteraction.get_user_engagement_metrics(current_user.id)
-        
-        # Record click
-        DonationInteraction.record_interaction(
-            user_id=current_user.id,
-            interaction_type="link_clicked",
-            source=source,
-            user_metrics=metrics,
-        )
-        
-        return jsonify({"success": True})
-    except Exception as e:
-        # Return success even if tracking fails (e.g., table doesn't exist yet)
-        return jsonify({"success": True, "note": "Tracking unavailable"})
-
-
-@main_bp.route("/donate/track-banner-dismissal", methods=["POST"])
-@login_required
-def track_banner_dismissal():
-    """Track banner dismissals"""
-    try:
-        from app.models import DonationInteraction
-        
-        # Get user metrics
-        metrics = DonationInteraction.get_user_engagement_metrics(current_user.id)
-        
-        # Record dismissal
-        DonationInteraction.record_interaction(
-            user_id=current_user.id,
-            interaction_type="banner_dismissed",
-            source="banner",
-            user_metrics=metrics,
-        )
-        
-        return jsonify({"success": True})
-    except Exception as e:
-        # Return success even if tracking fails (e.g., table doesn't exist yet)
-        return jsonify({"success": True, "note": "Tracking unavailable"})
 
 
 @main_bp.route("/debug/i18n")

@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% from "components/ui.html" import page_header %}
+
+{% block title %}{{ _('Jira Sprint Backlog') }} - {{ app_name }}{% endblock %}
+
+{% block content %}
+{% set breadcrumbs = [
+    {'text': 'Integrations', 'url': url_for('integrations.list_integrations')},
+    {'text': 'Jira', 'url': url_for('integrations.manage_integration', provider='jira')},
+    {'text': 'Sprint Backlog'}
+] %}
+
+{{ page_header(
+    icon_class='fas fa-list-check',
+    title_text=_('Sprint Backlog'),
+    subtitle_text=(sprint.name if sprint else _('No active sprint')) + (' — ' + board.name if board else ''),
+    breadcrumbs=breadcrumbs
+) }}
+
+<div class="space-y-6">
+    {% if sprint %}
+    <div class="bg-card-light dark:bg-card-dark p-6 rounded-lg shadow">
+        <div class="flex flex-wrap items-start justify-between gap-4">
+            <div>
+                <h2 class="text-lg font-semibold">{{ sprint.name }}</h2>
+                {% if sprint.goal %}
+                <p class="text-sm text-text-muted-light dark:text-text-muted-dark mt-1">{{ sprint.goal }}</p>
+                {% endif %}
+                {% if sprint.start_date and sprint.end_date %}
+                <p class="text-xs text-text-muted-light dark:text-text-muted-dark mt-2">
+                    <i class="fas fa-calendar mr-1"></i>
+                    {{ sprint.start_date[:10] }} &rarr; {{ sprint.end_date[:10] }}
+                </p>
+                {% endif %}
+            </div>
+            <span class="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 font-medium whitespace-nowrap">
+                {{ issues|length }} {{ _('issues') }}
+            </span>
+        </div>
+    </div>
+
+    <div class="bg-card-light dark:bg-card-dark rounded-lg shadow overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="bg-background-light dark:bg-background-dark text-left">
+                    <tr>
+                        <th class="px-4 py-3 font-medium text-text-muted-light dark:text-text-muted-dark">{{ _('Key') }}</th>
+                        <th class="px-4 py-3 font-medium text-text-muted-light dark:text-text-muted-dark">{{ _('Summary') }}</th>
+                        <th class="px-4 py-3 font-medium text-text-muted-light dark:text-text-muted-dark">{{ _('Status') }}</th>
+                        <th class="px-4 py-3 font-medium text-text-muted-light dark:text-text-muted-dark text-center">{{ _('Points') }}</th>
+                        <th class="px-4 py-3 font-medium text-text-muted-light dark:text-text-muted-dark">{{ _('Assignee') }}</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-border-light dark:divide-border-dark">
+                    {% for issue in issues %}
+                    <tr class="hover:bg-background-light dark:hover:bg-background-dark transition-colors">
+                        <td class="px-4 py-3 whitespace-nowrap">
+                            <a href="{{ issue.url }}" target="_blank" rel="noopener" class="text-primary hover:underline font-medium">
+                                {{ issue.key }}
+                            </a>
+                            <span class="block text-xs text-text-muted-light dark:text-text-muted-dark">
+                                {% if issue.type == 'Story' %}<i class="fas fa-bookmark mr-1"></i>
+                                {% elif issue.type == 'Bug' %}<i class="fas fa-bug mr-1"></i>
+                                {% elif issue.type == 'Task' %}<i class="fas fa-square-check mr-1"></i>
+                                {% else %}<i class="fas fa-circle mr-1"></i>{% endif %}
+                                {{ issue.type }}
+                            </span>
+                        </td>
+                        <td class="px-4 py-3">
+                            {{ issue.summary }}
+                            {% if issue.release %}
+                            <div class="mt-1 flex flex-wrap gap-1">
+                                {% for r in issue.release %}
+                                <span class="px-2 py-0.5 text-xs rounded bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">{{ r }}</span>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3 whitespace-nowrap">
+                            {% if issue.status_category == 'done' %}
+                            <span class="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">{{ issue.status }}</span>
+                            {% elif issue.status_category == 'indeterminate' or issue.status_category == 'inprogress' %}
+                            <span class="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">{{ issue.status }}</span>
+                            {% else %}
+                            <span class="px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200">{{ issue.status }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-center">
+                            {% if issue.story_points is not none %}
+                            <span class="px-2 py-1 text-xs rounded-full bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200 font-medium">
+                                {{ issue.story_points|round(0, 'common')|int if issue.story_points == issue.story_points|round(0, 'common') else issue.story_points }}
+                            </span>
+                            {% else %}
+                            <span class="text-text-muted-light dark:text-text-muted-dark text-xs">&mdash;</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-text-muted-light dark:text-text-muted-dark whitespace-nowrap">
+                            {{ issue.assignee or _('Unassigned') }}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5" class="px-4 py-8 text-center text-text-muted-light dark:text-text-muted-dark">
+                            {{ _('No issues found in the active sprint.') }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% else %}
+    <div class="bg-card-light dark:bg-card-dark p-6 rounded-lg shadow text-center">
+        <p class="text-text-muted-light dark:text-text-muted-dark">
+            {% if board %}
+            {{ _('No active sprint found for board') }} "{{ board.name }}".
+            {% else %}
+            {{ _('No board configured. Set the Board Name in the Jira integration configuration.') }}
+            {% endif %}
+        </p>
+        <a href="{{ url_for('integrations.manage_integration', provider='jira') }}" class="inline-block mt-4 bg-primary text-white px-4 py-2 rounded-lg hover:bg-primary/90 transition-colors">
+            {{ _('Go to Jira Configuration') }}
+        </a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

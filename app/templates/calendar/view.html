@@ -122,6 +122,28 @@
         </div>
     </div>
 
+    <!-- PO Day Activity Modal (Admin/Manager only) -->
+    <div id="dayPoTasksModal" class="modal" style="display: none;">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3 class="modal-title" id="dayPoTasksTitle">{{ _('PO Activity') }}</h3>
+                    <button type="button" class="close" data-dismiss="modal" data-modal="dayPoTasksModal">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="modal-body" id="dayPoTasksBody">
+                    <!-- Meetings and other tasks will be loaded here -->
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal" data-modal="dayPoTasksModal">
+                        {{ _('Close') }}
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
 <!-- Pass data to JavaScript -->
 <script>
     window.calendarData = {
@@ -134,6 +156,8 @@
         deleteEventUrl: '{{ url_for('calendar.delete_event', event_id=0) }}'.replace('/0', ''),
         moveEventUrl: '{{ url_for('calendar.move_event', event_id=0) }}'.replace('/0', ''),
         resizeEventUrl: '{{ url_for('calendar.resize_event', event_id=0) }}'.replace('/0', ''),
+        dayPoTasksUrl: '/api/calendar/day-po-tasks',
+        isAdminOrManager: {{ (current_user.is_admin or current_user.role == 'manager' or 'manager' in current_user.get_role_names())|tojson }},
         csrfToken: '{{ csrf_token() }}'
     };
 </script>

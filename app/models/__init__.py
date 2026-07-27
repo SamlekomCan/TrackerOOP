@@ -83,8 +83,10 @@ from .link_template import LinkTemplate
 from .custom_field_definition import CustomFieldDefinition
 from .salesman_email_mapping import SalesmanEmailMapping
 from .issue import Issue
-from .donation_interaction import DonationInteraction
 from .client_notification import ClientNotification, ClientNotificationPreferences, NotificationType
+from .epic import Epic
+from .story import Story
+from .trending_issue import TrendingIssue
 
 __all__ = [
     "User",
@@ -194,8 +196,10 @@ __all__ = [
     "CustomFieldDefinition",
     "SalesmanEmailMapping",
     "Issue",
-    "DonationInteraction",
     "ClientNotification",
     "ClientNotificationPreferences",
     "NotificationType",
+    "Epic",
+    "Story",
+    "TrendingIssue",
 ]

@@ -53,6 +53,9 @@ class TaskService:
         priority: str = "medium",
         due_date: Optional[Any] = None,
         estimated_hours: Optional[float] = None,
+        source: str = "manual",
+        story_id: Optional[int] = None,
+        due_time: Optional[Any] = None,
     ) -> Dict[str, Any]:
         """
         Create a new task.
@@ -86,6 +89,9 @@ class TaskService:
             estimated_hours=estimated_hours,
             status=TaskStatus.TODO.value,
             created_by=created_by,
+            source=source,
+            story_id=story_id,
+            due_time=due_time,
         )
 
         if not safe_commit("create_task", {"project_id": project_id, "created_by": created_by}):

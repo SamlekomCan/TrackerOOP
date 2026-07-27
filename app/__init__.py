@@ -989,6 +989,8 @@ def create_app(config=None):
     from app.routes.client_notes import client_notes_bp
     from app.routes.comments import comments_bp
     from app.routes.kanban import kanban_bp
+    from app.routes.deadlines import deadlines_bp
+    from app.routes.trending_issues import trending_issues_bp
     from app.routes.setup import setup_bp
     from app.routes.user import user_bp
     from app.routes.time_entry_templates import time_entry_templates_bp
@@ -1046,6 +1048,8 @@ def create_app(config=None):
     app.register_blueprint(client_portal_bp)
     app.register_blueprint(comments_bp)
     app.register_blueprint(kanban_bp)
+    app.register_blueprint(deadlines_bp)
+    app.register_blueprint(trending_issues_bp)
     app.register_blueprint(setup_bp)
     app.register_blueprint(user_bp)
     app.register_blueprint(time_entry_templates_bp)

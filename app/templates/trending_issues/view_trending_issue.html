@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}{{ issue.name }}{% endblock %}
+
+{% block content %}
+<div class="px-4 sm:px-6 lg:px-8">
+  <div class="max-w-3xl mx-auto">
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h2 class="text-2xl font-bold flex items-center gap-2">
+          <span class="w-9 h-9 rounded-lg bg-primary flex items-center justify-center text-white"><i class="fas fa-fire"></i></span>
+          {{ issue.name }}
+        </h2>
+        <p class="text-text-muted-light dark:text-text-muted-dark">
+          <span class="chip {{ 'chip-success' if issue.status == 'resolved' else 'chip-warning' }}">{{ issue.status|capitalize }}</span>
+        </p>
+      </div>
+      {% if current_user.is_admin or current_user.has_permission('manage_trending_issues') %}
+      <a href="{{ url_for('trending_issues.edit_trending_issue', issue_id=issue.id) }}" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-border-light dark:border-border-dark">
+        <i class="fas fa-edit"></i> {{ _('Edit') }}
+      </a>
+      {% endif %}
+    </div>
+
+    <div class="bg-card-light dark:bg-card-dark rounded-xl shadow ring-1 ring-border-light/60 dark:ring-border-dark/60 p-6 space-y-4">
+      <div>
+        <div class="text-sm font-medium text-text-muted-light dark:text-text-muted-dark">{{ _('PIC') }}</div>
+        <div>{{ issue.pic.display_name if issue.pic else _('Unassigned') }}</div>
+      </div>
+      <div>
+        <div class="text-sm font-medium text-text-muted-light dark:text-text-muted-dark">{{ _('Detail Issue') }}</div>
+        <div class="whitespace-pre-wrap">{{ issue.detail or '—' }}</div>
+      </div>
+      <div class="text-xs text-text-muted-light dark:text-text-muted-dark pt-2 border-t border-border-light dark:border-border-dark">
+        {{ _('Created by') }} {{ issue.creator.display_name if issue.creator else _('Unknown') }} &middot; {{ issue.created_at.strftime('%b %d, %Y %H:%M') }}
+      </div>
+    </div>
+
+    <a href="{{ url_for('trending_issues.list_trending_issues') }}" class="inline-block mt-6 text-primary hover:underline"><i class="fas fa-arrow-left"></i> {{ _('Back to Trending Issues') }}</a>
+  </div>
+</div>
+{% endblock %}

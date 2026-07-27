@@ -19,9 +19,6 @@ class PWAEnhancements {
         // Setup offline detection
         this.setupOfflineDetection();
 
-        // Setup install prompt
-        this.setupInstallPrompt();
-
         // Setup push notifications
         if ('PushManager' in window) {
             await this.setupPushNotifications();
@@ -117,55 +114,6 @@ class PWAEnhancements {
         const indicator = document.getElementById('offline-indicator');
         if (indicator) {
             indicator.style.display = 'none';
-        }
-    }
-
-    setupInstallPrompt() {
-        let deferredPrompt;
-        
-        window.addEventListener('beforeinstallprompt', (e) => {
-            // Prevent the mini-infobar from appearing
-            e.preventDefault();
-            deferredPrompt = e;
-            
-            // Show custom install button
-            this.showInstallButton(deferredPrompt);
-        });
-
-        // Listen for app installed
-        window.addEventListener('appinstalled', () => {
-            console.log('PWA installed');
-            this.hideInstallButton();
-            deferredPrompt = null;
-        });
-    }
-
-    showInstallButton(deferredPrompt) {
-        // Check if button already exists
-        if (document.getElementById('pwa-install-button')) {
-            return;
-        }
-
-        const button = document.createElement('button');
-        button.id = 'pwa-install-button';
-        button.className = 'fixed bottom-4 right-4 bg-primary text-white px-4 py-2 rounded-lg shadow-lg hover:bg-primary/90 z-50';
-        button.innerHTML = '<i class="fas fa-download mr-2"></i>Install App';
-        
-        button.addEventListener('click', async () => {
-            deferredPrompt.prompt();
-            const { outcome } = await deferredPrompt.userChoice;
-            console.log(`User response to install prompt: ${outcome}`);
-            this.hideInstallButton();
-            deferredPrompt = null;
-        });
-
-        document.body.appendChild(button);
-    }
-
-    hideInstallButton() {
-        const button = document.getElementById('pwa-install-button');
-        if (button) {
-            button.remove();
         }
     }
 

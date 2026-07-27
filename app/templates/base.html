@@ -790,6 +790,11 @@
                                             <i class="fas fa-list-ul w-4 mr-2"></i>{{ _('Per Diem Rates') }}
                                         </a>
                                     </li>
+                                    <li>
+                                        <a onclick="event.stopPropagation();" class="block px-2 py-1 rounded {% if ep.startswith('deadlines.') %}text-primary font-semibold bg-background-light dark:bg-background-dark{% else %}text-text-light dark:text-text-dark hover:bg-background-light dark:hover:bg-background-dark{% endif %}" href="{{ url_for('deadlines.list_epics') }}">
+                                            <i class="fas fa-layer-group w-4 mr-2"></i>{{ _('Epics & Stories') }}
+                                        </a>
+                                    </li>
                                     {% endif %}
                                     {% if current_user.is_admin or has_permission('manage_settings') %}
                                     <li>
@@ -864,13 +869,6 @@
                             <span class="ml-3 sidebar-label">{{ _('Help') }}</span>
                         </a>
                     </li>
-                    <li class="mt-2">
-                        <a href="{{ url_for('main.donate') }}" class="flex items-center p-2 rounded-lg {% if ep == 'main.donate' %}bg-background-light dark:bg-background-dark text-primary font-semibold{% else %}bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 hover:from-amber-500/20 hover:to-orange-500/20 hover:border-amber-500/30{% endif %} transition-all duration-200 group">
-                            <i class="fas fa-mug-saucer w-6 text-center group-hover:scale-110 transition-transform"></i>
-                            <span class="ml-3 sidebar-label font-medium">{{ _('Support Development') }}</span>
-                            <span class="ml-auto text-xs opacity-70">☕</span>
-                        </a>
-                    </li>
                 </ul>
                 <!-- App Version -->
                 <div class="mt-4 pt-3 border-t border-border-light dark:border-border-dark">
@@ -906,17 +904,6 @@
 
                 <!-- Right side controls -->
                 <div class="flex items-center space-x-4">
-                    <!-- BuyMeACoffee Button -->
-                    <a href="https://buymeacoffee.com/DryTrix?utm_source=timetracker&utm_medium=header&utm_campaign=support" 
-                       target="_blank" 
-                       rel="noopener noreferrer"
-                       onclick="trackDonationClick('header')"
-                       class="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 hover:from-amber-500/20 hover:to-orange-500/20 hover:border-amber-500/30 transition-all duration-200 text-sm font-medium"
-                       title="{{ _('Support TimeTracker development') }}">
-                        <i class="fas fa-mug-saucer"></i>
-                        <span class="hidden lg:inline">{{ _('Support') }}</span>
-                    </a>
-                    
                     <button id="theme-toggle" type="button" class="text-text-light dark:text-text-dark hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-4 focus:ring-gray-200 dark:focus:ring-gray-700 rounded-lg text-sm p-2.5" aria-label="{{ _('Toggle dark mode') }}">
                         <i id="theme-toggle-dark-icon" class="hidden fa-solid fa-moon w-5 h-5"></i>
                         <i id="theme-toggle-light-icon" class="hidden fa-solid fa-sun w-5 h-5"></i>
@@ -970,10 +957,20 @@
                             <li class="px-4 py-3 border-b border-border-light dark:border-border-dark">
                                 <div class="text-sm font-medium text-text-light dark:text-text-dark">{{ current_user.display_name if current_user.is_authenticated else _('Guest') }}</div>
                                 <div class="text-xs text-text-muted-light dark:text-text-muted-dark">{{ current_user.email if current_user.is_authenticated else '' }}</div>
+                                {% if current_user.is_authenticated and current_user.is_admin %}
+                                <form method="POST" action="{{ url_for('admin.quick_switch_role') }}" class="mt-2">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <label for="quickRoleSwitch" class="block text-[10px] uppercase tracking-wide text-text-muted-light dark:text-text-muted-dark mb-1">{{ _('Testing: act as role') }}</label>
+                                    <select name="role" id="quickRoleSwitch" onchange="this.form.submit()" class="w-full text-xs bg-background-light dark:bg-background-dark border border-border-light dark:border-border-dark rounded px-2 py-1 text-text-light dark:text-text-dark">
+                                        <option value="admin" {% if current_user.role == 'admin' %}selected{% endif %}>{{ _('Admin') }}</option>
+                                        <option value="manager" {% if current_user.role == 'manager' %}selected{% endif %}>{{ _('Manager') }}</option>
+                                        <option value="po" {% if current_user.role == 'po' %}selected{% endif %}>{{ _('PO') }}</option>
+                                    </select>
+                                </form>
+                                {% endif %}
                             </li>
                             <li><a href="{{ url_for('auth.profile') }}" class="flex items-center gap-2 px-4 py-2 text-sm text-text-light dark:text-text-dark hover:bg-gray-100 dark:hover:bg-gray-700"><i class="fas fa-user w-4"></i> {{ _('My Profile') }}</a></li>
                             <li><a href="{{ url_for('user.settings') }}" class="flex items-center gap-2 px-4 py-2 text-sm text-text-light dark:text-text-dark hover:bg-gray-100 dark:hover:bg-gray-700"><i class="fas fa-cog w-4"></i> {{ _('My Settings') }}</a></li>
-                            <li><a href="{{ url_for('main.donate') }}" class="flex items-center gap-2 px-4 py-2 text-sm text-amber-600 dark:text-amber-400 hover:bg-gray-100 dark:hover:bg-gray-700"><i class="fas fa-mug-saucer w-4"></i> {{ _('Support Development') }}</a></li>
                             <li class="border-t border-border-light dark:border-border-dark"><a href="{{ url_for('auth.logout') }}" class="flex items-center gap-2 px-4 py-2 text-sm text-rose-600 dark:text-rose-400 hover:bg-gray-100 dark:hover:bg-gray-700"><i class="fas fa-sign-out-alt w-4"></i> {{ _('Logout') }}</a></li>
                         </ul>
                     </div>
@@ -992,48 +989,6 @@
                         {% endfor %}
                     {% endif %}
                 {% endwith %}
-            </div>
-
-            <!-- Dismissible Support Banner -->
-            <div id="supportBanner" class="bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border-b border-amber-200 dark:border-amber-800 px-4 py-3 opacity-0 invisible max-h-0 overflow-hidden transition-all duration-300 ease-in-out">
-                <div class="max-w-7xl mx-auto flex items-center justify-between gap-4">
-                    <div class="flex items-center gap-3 flex-1">
-                        <i class="fas fa-mug-saucer text-amber-600 dark:text-amber-400 text-lg"></i>
-                        <div class="flex-1">
-                            <p class="text-sm font-medium text-amber-900 dark:text-amber-100" id="bannerTitle">
-                                {{ _('Enjoying TimeTracker?') }}
-                            </p>
-                            <p class="text-xs text-amber-700 dark:text-amber-300" id="bannerMessage">
-                                {{ _('Your support helps fund server costs and new features') }} ☕
-                            </p>
-                        </div>
-                    </div>
-                    <div class="flex items-center gap-2 flex-wrap">
-                        <a href="{{ url_for('main.donate') }}" 
-                           class="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium rounded-lg transition-colors">
-                            {{ _('Learn More') }}
-                        </a>
-                        <a href="https://buymeacoffee.com/DryTrix?utm_source=timetracker&utm_medium=banner&utm_campaign=support" 
-                           target="_blank" 
-                           rel="noopener noreferrer"
-                           onclick="trackDonationClick('banner_bmc')"
-                           class="px-3 py-1.5 bg-white hover:bg-amber-50 text-amber-600 text-sm font-medium rounded-lg transition-colors border border-amber-600">
-                            <i class="fas fa-mug-saucer mr-1"></i>{{ _('Buy Me a Coffee') }}
-                        </a>
-                        <a href="https://www.paypal.com/donate/?hosted_button_id=KZB27X5LNGU3J" 
-                           target="_blank" 
-                           rel="noopener noreferrer"
-                           onclick="trackDonationClick('banner_paypal')"
-                           class="px-3 py-1.5 text-white text-sm font-medium rounded-lg transition-colors border border-blue-600 hover:opacity-90" style="background: linear-gradient(to right, #0070ba, #003087);">
-                            <i class="fab fa-paypal mr-1"></i>{{ _('PayPal') }}
-                        </a>
-                        <button onclick="dismissSupportBanner()" 
-                                class="p-1.5 text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/30 rounded transition-colors"
-                                aria-label="{{ _('Dismiss') }}">
-                            <i class="fas fa-times"></i>
-                        </button>
-                    </div>
-                </div>
             </div>
 
             <!-- Main page content -->
@@ -1601,108 +1556,6 @@
                     .catch(err => console.log('ServiceWorker registration failed:', err));
             });
         }
-        
-        // Install prompt
-        let deferredPrompt;
-        
-        // Check if user has previously dismissed the install prompt or app is already installed
-        const installPromptDismissed = localStorage.getItem('pwa-install-dismissed');
-        const isAppInstalled = window.matchMedia('(display-mode: standalone)').matches || 
-                               window.navigator.standalone === true ||
-                               document.referrer.includes('android-app://');
-        
-        // Only register the event listener if prompt hasn't been dismissed and app isn't installed
-        if (installPromptDismissed !== 'true' && !isAppInstalled) {
-            window.addEventListener('beforeinstallprompt', (e) => {
-                e.preventDefault();
-                
-                // Double-check dismissal status when event fires
-                const stillDismissed = localStorage.getItem('pwa-install-dismissed');
-                if (stillDismissed === 'true') {
-                    return; // Don't show the prompt if it was dismissed
-                }
-                
-                deferredPrompt = e;
-                
-                // Show install button in UI
-                if (window.toastManager && typeof window.toastManager.show === 'function') {
-                    // Create a non-dismissible toast so we can add custom buttons
-                    const toastId = window.toastManager.show({
-                        message: 'Install TimeTracker as an app!',
-                        type: 'info',
-                        duration: 0,
-                        dismissible: false
-                    });
-                    
-                    // Check if toast was created successfully
-                    if (!toastId) {
-                        console.warn('Failed to create PWA install toast');
-                        return;
-                    }
-                    
-                    // Get the toast element after it's added to DOM
-                    // Use setTimeout to ensure DOM is updated after requestAnimationFrame in show()
-                    setTimeout(() => {
-                        const toastElement = document.querySelector(`[data-toast-id="${toastId}"]`);
-                        if (!toastElement) {
-                            console.warn('PWA install toast element not found');
-                            return;
-                        }
-                        
-                        const btn = document.createElement('button');
-                        btn.textContent = 'Install';
-                        btn.className = 'ml-2 px-3 py-1 bg-primary text-white rounded hover:bg-primary/90';
-                        btn.onclick = async () => {
-                            if (!deferredPrompt) return;
-                            deferredPrompt.prompt();
-                            const { outcome } = await deferredPrompt.userChoice;
-                            if (outcome === 'accepted') {
-                                if (window.toastManager && typeof window.toastManager.success === 'function') {
-                                    window.toastManager.success('App installed successfully!');
-                                }
-                            }
-                            // Always mark as dismissed after user interaction
-                            localStorage.setItem('pwa-install-dismissed', 'true');
-                            deferredPrompt = null;
-                            if (window.toastManager && typeof window.toastManager.dismiss === 'function') {
-                                window.toastManager.dismiss(toastId);
-                            }
-                        };
-                        
-                        // Add a dismiss button
-                        const dismissBtn = document.createElement('button');
-                        dismissBtn.textContent = '×';
-                        dismissBtn.className = 'ml-2 px-2 py-1 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded';
-                        dismissBtn.title = 'Dismiss permanently';
-                        dismissBtn.onclick = () => {
-                            localStorage.setItem('pwa-install-dismissed', 'true');
-                            deferredPrompt = null;
-                            if (window.toastManager && typeof window.toastManager.dismiss === 'function') {
-                                window.toastManager.dismiss(toastId);
-                            }
-                        };
-                        
-                        // Insert buttons in the toast content area
-                        const content = toastElement.querySelector('.toast-content');
-                        if (content) {
-                            content.appendChild(btn);
-                            content.appendChild(dismissBtn);
-                        } else {
-                            // Fallback: append to toast element directly if content not found
-                            console.warn('Toast content element not found, appending buttons to toast element');
-                            toastElement.appendChild(btn);
-                            toastElement.appendChild(dismissBtn);
-                        }
-                    }, 100); // Small delay to ensure DOM is ready
-                }
-            });
-            
-            // Also listen for app installation to mark as dismissed
-            window.addEventListener('appinstalled', () => {
-                localStorage.setItem('pwa-install-dismissed', 'true');
-                deferredPrompt = null;
-            });
-        }
     </script>
     
     <script>
@@ -1805,190 +1658,10 @@
         // Close on Escape
         document.addEventListener('keydown', function(e){ if (e.key === 'Escape') closeAllMenus(); });
         
-        // Support Banner Logic with Smart Prompts
-        function dismissSupportBanner() {
-            const banner = document.getElementById('supportBanner');
-            if (banner) {
-                banner.classList.add('opacity-0', 'invisible', 'max-h-0', 'overflow-hidden');
-                banner.classList.remove('opacity-100', 'visible', 'max-h-[100px]');
-                // Store dismissal timestamp (show again after 30 days)
-                try {
-                    localStorage.setItem('supportBannerDismissed', Date.now().toString());
-                    // Track dismissal
-                    trackBannerDismissal();
-                } catch(e) {}
-            }
-        }
-        
-        function trackBannerDismissal() {
-            // Get CSRF token from meta tag
-            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
-            
-            fetch('{{ url_for("main.track_banner_dismissal") }}', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': csrfToken
-                },
-                credentials: 'same-origin',
-                body: JSON.stringify({})
-            }).catch(() => {
-                // Silently fail if tracking doesn't work
-            });
-        }
-        
-        function trackDonationClick(source) {
-            // Get CSRF token from meta tag
-            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
-            
-            fetch('{{ url_for("main.track_donation_click") }}', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': csrfToken
-                },
-                credentials: 'same-origin',
-                body: JSON.stringify({
-                    source: source
-                })
-            }).catch(() => {
-                // Silently fail if tracking doesn't work
-            });
-        }
-        
-        function shouldShowSupportBanner() {
-            try {
-                // Check if dismissed recently (30 days)
-                const dismissed = localStorage.getItem('supportBannerDismissed');
-                if (dismissed) {
-                    const dismissedTime = parseInt(dismissed);
-                    const thirtyDays = 30 * 24 * 60 * 60 * 1000; // 30 days in milliseconds
-                    if ((Date.now() - dismissedTime) < thirtyDays) {
-                        return false;
-                    }
-                }
-                
-                // Check if user clicked donation link recently (30 days)
-                const lastClick = localStorage.getItem('donationLinkClicked');
-                if (lastClick) {
-                    const clickTime = parseInt(lastClick);
-                    const thirtyDays = 30 * 24 * 60 * 60 * 1000;
-                    if ((Date.now() - clickTime) < thirtyDays) {
-                        return false;
-                    }
-                }
-                
-                return true;
-            } catch(e) {
-                return true; // Show by default if localStorage fails
-            }
-        }
-        
-        function updateBannerMessage() {
-            // Get user stats from page if available
-            const bannerTitle = document.getElementById('bannerTitle');
-            const bannerMessage = document.getElementById('bannerMessage');
-            
-            if (!bannerTitle || !bannerMessage) return;
-            
-            // Try to get user stats from data attributes or API
-            const userStats = window.userStats || {};
-            const daysSinceSignup = userStats.days_since_signup || 0;
-            const timeEntriesCount = userStats.time_entries_count || 0;
-            const totalHours = userStats.total_hours || 0;
-            
-            // Smart messaging based on milestones
-            if (totalHours >= 100) {
-                bannerTitle.textContent = '{{ _("Amazing! You\'ve tracked over 100 hours") }}';
-                bannerMessage.textContent = '{{ _("Your support helps us keep TimeTracker free and improving") }} ☕';
-            } else if (timeEntriesCount >= 50) {
-                bannerTitle.textContent = '{{ _("Great progress! You\'ve logged 50+ entries") }}';
-                bannerMessage.textContent = '{{ _("Help us continue developing features you love") }} ☕';
-            } else if (daysSinceSignup >= 7) {
-                bannerTitle.textContent = '{{ _("Thanks for using TimeTracker!") }}';
-                bannerMessage.textContent = '{{ _("Your support helps fund server costs and new features") }} ☕';
-            } else {
-                // Default message
-                bannerTitle.textContent = '{{ _("Enjoying TimeTracker?") }}';
-                bannerMessage.textContent = '{{ _("Your support helps fund server costs and new features") }} ☕';
-            }
-        }
-        
-        // Show support banner if conditions are met
-        // Check immediately to reserve space and prevent layout shift
-        (function() {
-            const banner = document.getElementById('supportBanner');
-            if (!banner) return;
-            
-            if (shouldShowSupportBanner()) {
-                // Update banner message based on user stats
-                updateBannerMessage();
-                
-                // Reserve space immediately by removing height constraints
-                // This prevents layout shift when banner becomes visible
-                banner.classList.remove('max-h-0', 'overflow-hidden');
-                // Space is now reserved, content just invisible
-                
-                // Show banner with a slight delay for better UX, but space is already reserved
-                setTimeout(() => {
-                    banner.classList.remove('opacity-0', 'invisible');
-                    banner.classList.add('opacity-100', 'visible');
-                }, 2000); // Show after 2 seconds
-            } else {
-                // Keep it hidden and collapsed - no space reserved
-                banner.classList.add('max-h-0', 'overflow-hidden');
-            }
-        })();
-        
-        // Track donation link clicks
-        document.addEventListener('click', function(e) {
-            const link = e.target.closest('a[href*="buymeacoffee.com"], a[href*="paypal.com/donate"]');
-            if (link) {
-                try {
-                    localStorage.setItem('donationLinkClicked', Date.now().toString());
-                } catch(e) {}
-            }
-        });
     </script>
-    
+
     <script src="{{ url_for('static', filename='data-tables-enhanced.js') }}"></script>
-    
-    <!-- User Stats for Smart Banner -->
-    {% if current_user.is_authenticated %}
-    <script>
-        window.userStats = {
-            days_since_signup: {{ user_stats.days_since_signup if user_stats else 0 }},
-            time_entries_count: {{ user_stats.time_entries_count if user_stats else 0 }},
-            total_hours: {{ user_stats.total_hours if user_stats else 0.0 }}
-        };
-    </script>
-    {% endif %}
-    
-    
-    <!-- Global donation tracking function -->
-    <script>
-        function trackDonationClick(source) {
-            {% if current_user.is_authenticated %}
-            // Get CSRF token from meta tag
-            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
-            
-            fetch('{{ url_for("main.track_donation_click") }}', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': csrfToken
-                },
-                credentials: 'same-origin',
-                body: JSON.stringify({
-                    source: source
-                })
-            }).catch(() => {
-                // Silently fail if tracking doesn't work
-            });
-            {% endif %}
-        }
-    </script>
-    
+
     {% block scripts_extra %}{% endblock %}
 </body>
 </html>

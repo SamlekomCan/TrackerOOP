@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}{{ _('Create Epic') }}{% endblock %}
+
+{% block content %}
+<div class="px-4 sm:px-6 lg:px-8">
+  <div class="max-w-3xl mx-auto">
+    <div class="mb-6">
+      <h2 class="text-2xl font-bold flex items-center gap-2">
+        <span class="w-9 h-9 rounded-lg bg-primary flex items-center justify-center text-white"><i class="fas fa-plus-circle"></i></span>
+        {{ _('Create Epic') }}
+      </h2>
+      <p class="text-text-muted-light dark:text-text-muted-dark">{{ _('Epics group related Stories') }}</p>
+    </div>
+
+    <div class="bg-card-light dark:bg-card-dark rounded-xl shadow ring-1 ring-border-light/60 dark:ring-border-dark/60">
+      <div class="p-6">
+        <form method="POST" action="{{ url_for('deadlines.create_epic') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+          <div class="mb-4">
+            <label for="name" class="block text-sm font-medium mb-1">{{ _('Epic Name') }} <span class="text-red-600">*</span></label>
+            <input type="text" id="name" name="name" required autofocus class="w-full rounded-lg border border-border-light dark:border-border-dark bg-background-light dark:bg-gray-700 px-3 py-2">
+          </div>
+
+          <div class="mb-4">
+            <label for="description" class="block text-sm font-medium mb-1">{{ _('Description') }}</label>
+            <textarea id="description" name="description" rows="3" class="w-full rounded-lg border border-border-light dark:border-border-dark bg-background-light dark:bg-gray-700 px-3 py-2"></textarea>
+          </div>
+
+          <div class="mb-6">
+            <label for="deadline_date" class="block text-sm font-medium mb-1">{{ _('Tanggal Deadline') }}</label>
+            <input type="date" id="deadline_date" name="deadline_date" class="w-full rounded-lg border border-border-light dark:border-border-dark bg-background-light dark:bg-gray-700 px-3 py-2">
+          </div>
+
+          <div class="flex justify-end gap-3">
+            <a href="{{ url_for('deadlines.list_epics') }}" class="px-4 py-2 rounded-lg border border-border-light dark:border-border-dark">{{ _('Cancel') }}</a>
+            <button type="submit" class="px-4 py-2 rounded-lg bg-primary text-white hover:opacity-90">{{ _('Create Epic') }}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

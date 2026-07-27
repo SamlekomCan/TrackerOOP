@@ -34,6 +34,11 @@
             </div>
         </div>
         <div>
+            <h2 class="text-sm font-medium text-text-muted-light dark:text-text-muted-dark">{{ _('Name') }}</h2>
+            <p class="mt-1 text-lg">{{ current_user.full_name or _('Not set') }}</p>
+        </div>
+        <div class="border-t border-border-light dark:border-border-dark"></div>
+        <div>
             <h2 class="text-sm font-medium text-text-muted-light dark:text-text-muted-dark">Username</h2>
             <p class="mt-1 text-lg">{{ current_user.username }}</p>
         </div>

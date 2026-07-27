@@ -1,9 +1,9 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, make_response, Response
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, make_response, Response, current_app
 from flask_babel import gettext as _
 from flask_login import login_required, current_user
 import app as app_module
 from app import db
-from app.models import Task, Project, User, TimeEntry, TaskActivity, KanbanColumn, Activity
+from app.models import Task, Project, User, TimeEntry, TaskActivity, KanbanColumn, Activity, Comment
 from datetime import datetime, date
 from decimal import Decimal
 from app.utils.db import safe_commit
@@ -258,8 +258,12 @@ def view_task(task_id):
         flash(_("Task not found"), "error")
         return redirect(url_for("tasks.list_tasks"))
 
-    # Check if user has access to this task
-    if not current_user.is_admin and task.assigned_to != current_user.id and task.created_by != current_user.id:
+    # Check if user has access to this task (admins and managers can view any task,
+    # e.g. a PO's Check-In meeting activity surfaced on their calendar)
+    is_admin_or_manager = (
+        current_user.is_admin or current_user.role == "manager" or "manager" in current_user.get_role_names()
+    )
+    if not is_admin_or_manager and task.assigned_to != current_user.id and task.created_by != current_user.id:
         flash(_("You do not have access to this task"), "error")
         return redirect(url_for("tasks.list_tasks"))
 
@@ -639,6 +643,250 @@ def update_task_status(task_id):
         flash(str(e), "error")
 
     return redirect(url_for("tasks.view_task", task_id=task.id))
+
+
+def _invalidate_dashboard_cache(user_id):
+    """Invalidate the cached dashboard so check-in/check-out changes appear immediately."""
+    try:
+        from app.utils.cache import get_cache
+
+        get_cache().delete(f"dashboard:{user_id}")
+    except Exception as e:
+        current_app.logger.warning("Failed to invalidate dashboard cache: %s", e)
+
+
+_CHECKIN_PROJECT_NAME = "Check-In Tasks"
+
+
+def _get_or_create_checkin_project():
+    """Get (or lazily create) the system project that anchors Check-In tasks.
+
+    Epics/Stories are top-level and not tied to a Project, but Task.project_id is
+    still required by the rest of the app (Kanban, reports, etc.), so all
+    Check-In-created tasks are parked under one shared project.
+    """
+    project = Project.query.filter_by(name=_CHECKIN_PROJECT_NAME).first()
+    if project:
+        return project
+
+    project = Project(name=_CHECKIN_PROJECT_NAME, status="active", created_by=current_user.id)
+    db.session.add(project)
+    safe_commit("create_checkin_project", {})
+    return project
+
+
+@tasks_bp.route("/tasks/check-in", methods=["POST"])
+@login_required
+def check_in():
+    """Quickly schedule a follow-up task from the dashboard Timer widget."""
+    from app.services import TaskService
+    from app.models import Epic, Story
+
+    story_id = request.form.get("story_id", type=int)
+    new_epic_name = request.form.get("new_epic_name", "").strip()
+    new_story_name = request.form.get("new_story_name", "").strip()
+    name = request.form.get("name", "").strip()
+    description = request.form.get("description", "").strip()
+    due_date_raw = request.form.get("due_date", "").strip()
+    meeting_time_raw = request.form.get("meeting_time", "").strip()
+    priority = request.form.get("priority", "medium").strip() or "medium"
+
+    if not name:
+        flash(_("Task name is required"), "error")
+        return redirect(url_for("main.dashboard"))
+
+    story = Story.query.get(story_id) if story_id else None
+
+    if not story and (new_epic_name or new_story_name):
+        if not new_epic_name or not new_story_name:
+            flash(_("Please provide both an Epic name and a Story name"), "error")
+            return redirect(url_for("main.dashboard"))
+
+        epic = Epic.query.filter(db.func.lower(Epic.name) == new_epic_name.lower()).first()
+        if not epic:
+            epic = Epic(name=new_epic_name, created_by=current_user.id)
+            db.session.add(epic)
+            db.session.flush()
+
+        story = Story.query.filter(
+            Story.epic_id == epic.id, db.func.lower(Story.name) == new_story_name.lower()
+        ).first()
+        if not story:
+            story = Story(epic_id=epic.id, name=new_story_name, created_by=current_user.id)
+            db.session.add(story)
+            db.session.flush()
+
+    if not story:
+        flash(_("Please select a story, or enter a new Epic/Story name"), "error")
+        return redirect(url_for("main.dashboard"))
+
+    project_id = _get_or_create_checkin_project().id
+
+    if due_date_raw:
+        try:
+            due_date = datetime.strptime(due_date_raw, "%Y-%m-%d").date()
+        except ValueError:
+            flash(_("Invalid date"), "error")
+            return redirect(url_for("main.dashboard"))
+    else:
+        due_date = now_in_app_timezone().date()
+
+    due_time = None
+    if meeting_time_raw:
+        try:
+            due_time = datetime.strptime(meeting_time_raw, "%H:%M").time()
+        except ValueError:
+            due_time = None
+
+    task_service = TaskService()
+    result = task_service.create_task(
+        name=name,
+        project_id=project_id,
+        created_by=current_user.id,
+        description=description or None,
+        assignee_id=current_user.id,
+        priority=priority,
+        due_date=due_date,
+        source="check_in",
+        story_id=story.id,
+        due_time=due_time,
+    )
+
+    if not result["success"]:
+        flash(result["message"], "error")
+        return redirect(url_for("main.dashboard"))
+
+    task = result["task"]
+    db.session.add(
+        TaskActivity(task_id=task.id, user_id=current_user.id, event="check_in", details="Checked in via dashboard")
+    )
+    safe_commit("log_task_checkin", {"task_id": task.id})
+
+    _invalidate_dashboard_cache(current_user.id)
+    flash(_("Checked in — task added to your Upcoming Tasks"), "success")
+    return redirect(url_for("main.dashboard"))
+
+
+@tasks_bp.route("/tasks/check-out", methods=["POST"])
+@login_required
+def check_out():
+    """Report a follow-up on a previously checked-in task from the dashboard."""
+    task_id = request.form.get("task_id", type=int)
+    note = request.form.get("note", "").strip()
+    resolution = request.form.get("resolution", "").strip()
+    next_due_date_raw = request.form.get("next_due_date", "").strip()
+
+    if not task_id:
+        flash(_("Please select a task"), "error")
+        return redirect(url_for("main.dashboard"))
+
+    task = Task.query.get_or_404(task_id)
+
+    if not current_user.is_admin and task.assigned_to != current_user.id and task.created_by != current_user.id:
+        flash(_("You do not have permission to update this task"), "error")
+        return redirect(url_for("main.dashboard"))
+
+    if not note:
+        flash(_("Please add a follow-up note"), "error")
+        return redirect(url_for("main.dashboard"))
+
+    if resolution not in ("followup", "done"):
+        flash(_("Invalid selection"), "error")
+        return redirect(url_for("main.dashboard"))
+
+    next_due_date = None
+    if resolution == "followup":
+        try:
+            next_due_date = datetime.strptime(next_due_date_raw, "%Y-%m-%d").date()
+        except ValueError:
+            flash(_("Please choose a valid follow-up date"), "error")
+            return redirect(url_for("main.dashboard"))
+
+    comment = Comment(content=note, user_id=current_user.id, task_id=task.id, is_internal=True)
+    db.session.add(comment)
+
+    if resolution == "done":
+        task.cancel_task()
+        db.session.add(
+            TaskActivity(
+                task_id=task.id,
+                user_id=current_user.id,
+                event="cancel",
+                details="No further follow-up needed (check-out)",
+            )
+        )
+        if task.story:
+            epic = task.story.epic
+            epic.follow_up_notes = note
+            epic.last_follow_up_at = now_in_app_timezone()
+            epic.next_follow_up_date = None
+        if not safe_commit("check_out_cancel", {"task_id": task.id}):
+            flash(_("Could not update task due to a database error"), "error")
+            return redirect(url_for("main.dashboard"))
+        flash(_("Task closed — no further follow-up needed"), "success")
+    else:
+        task.due_date = next_due_date
+        task.updated_at = now_in_app_timezone()
+        db.session.add(
+            TaskActivity(
+                task_id=task.id,
+                user_id=current_user.id,
+                event="check_out",
+                details=f"Follow-up rescheduled to {next_due_date}",
+            )
+        )
+        if task.story:
+            epic = task.story.epic
+            epic.follow_up_notes = note
+            epic.last_follow_up_at = now_in_app_timezone()
+            epic.next_follow_up_date = next_due_date
+        if not safe_commit("check_out_followup", {"task_id": task.id}):
+            flash(_("Could not update task due to a database error"), "error")
+            return redirect(url_for("main.dashboard"))
+        flash(_("Follow-up date updated"), "success")
+
+    _invalidate_dashboard_cache(current_user.id)
+    return redirect(url_for("main.dashboard"))
+
+
+@tasks_bp.route("/tasks/check-in/<int:task_id>/delete", methods=["POST"])
+@login_required
+def delete_checkin_task(task_id):
+    """Remove a Check-In task from the dashboard's Upcoming Task list (hard delete)."""
+    task = Task.query.get_or_404(task_id)
+
+    if task.source != "check_in":
+        flash(_("This action is only available for Check-In tasks"), "error")
+        return redirect(url_for("main.dashboard"))
+
+    if not current_user.is_admin and task.assigned_to != current_user.id and task.created_by != current_user.id:
+        flash(_("You do not have permission to delete this task"), "error")
+        return redirect(url_for("main.dashboard"))
+
+    if task.time_entries.count() > 0:
+        flash(_("Cannot delete a task with existing time entries"), "error")
+        return redirect(url_for("main.dashboard"))
+
+    task_name = task.name
+    Activity.log(
+        user_id=current_user.id,
+        action="deleted",
+        entity_type="task",
+        entity_id=task.id,
+        entity_name=task_name,
+        description=f'Deleted check-in task "{task_name}"',
+        ip_address=request.remote_addr,
+        user_agent=request.headers.get("User-Agent"),
+    )
+
+    db.session.delete(task)
+    if not safe_commit("delete_checkin_task", {"task_id": task_id}):
+        flash(_("Could not delete task due to a database error."), "error")
+        return redirect(url_for("main.dashboard"))
+
+    _invalidate_dashboard_cache(current_user.id)
+    flash(_('Check-in "%(name)s" deleted', name=task_name), "success")
+    return redirect(url_for("main.dashboard"))
 
 
 @tasks_bp.route("/tasks/<int:task_id>/priority", methods=["POST"])

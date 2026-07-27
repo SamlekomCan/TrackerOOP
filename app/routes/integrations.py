@@ -386,6 +386,80 @@ def manage_integration(provider):
             else:
                 flash(_("Failed to update credentials."), "error")
         
+        # Check if this is a Jira Personal Access Token update (non-OAuth, for Jira Server/Data Center)
+        elif request.form.get("action") == "update_jira_pat_credentials":
+            if provider != "jira":
+                flash(_("This action is only available for Jira integrations."), "error")
+                return redirect(url_for("integrations.manage_integration", provider=provider))
+
+            if not current_user.is_admin:
+                flash(_("Only administrators can configure Jira credentials."), "error")
+                return redirect(url_for("integrations.manage_integration", provider=provider))
+
+            integration_to_update = integration
+            if not integration_to_update:
+                flash(_("Integration not found."), "error")
+                return redirect(url_for("integrations.manage_integration", provider=provider))
+
+            base_url = request.form.get("jira_base_url", "").strip().rstrip("/")
+            pat = request.form.get("jira_pat", "").strip()
+
+            if not base_url:
+                flash(_("Jira Base URL is required."), "error")
+                return redirect(url_for("integrations.manage_integration", provider=provider))
+
+            from urllib.parse import urlparse
+
+            parsed = urlparse(base_url)
+            if not parsed.scheme or not parsed.netloc:
+                flash(_("Jira Base URL must be a valid URL (e.g., https://jira.bri.co.id)."), "error")
+                return redirect(url_for("integrations.manage_integration", provider=provider))
+
+            # Normalize to scheme+host only: users often paste a full page URL
+            # (e.g. a board/issue link) instead of the bare instance URL.
+            base_url = f"{parsed.scheme}://{parsed.netloc}"
+
+            existing_creds = IntegrationCredential.query.filter_by(integration_id=integration_to_update.id).first()
+            if not existing_creds and not pat:
+                flash(_("Personal Access Token is required for new setup."), "error")
+                return redirect(url_for("integrations.manage_integration", provider=provider))
+
+            token_to_save = pat if pat else (existing_creds.access_token if existing_creds else "")
+            if not token_to_save:
+                flash(_("Personal Access Token is required."), "error")
+                return redirect(url_for("integrations.manage_integration", provider=provider))
+
+            if not integration_to_update.config:
+                integration_to_update.config = {}
+            integration_to_update.config["jira_url"] = base_url
+            integration_to_update.config["auth_method"] = "pat"
+            from sqlalchemy.orm.attributes import flag_modified
+
+            flag_modified(integration_to_update, "config")
+
+            result = service.save_credentials(
+                integration_id=integration_to_update.id,
+                access_token=token_to_save,
+                refresh_token=None,
+                expires_at=None,
+                token_type="Bearer",
+                scope="pat",
+                extra_data={},
+            )
+
+            if result.get("success"):
+                flash(_("Jira Personal Access Token saved successfully."), "success")
+            else:
+                flash(
+                    _(
+                        "Failed to save Jira credentials: %(message)s",
+                        message=result.get("message", "Unknown error"),
+                    ),
+                    "error",
+                )
+
+            return redirect(url_for("integrations.manage_integration", provider=provider))
+
         # Check if this is a CalDAV credential update (non-OAuth)
         elif request.form.get("action") == "update_caldav_credentials":
             # CalDAV uses username/password, not OAuth
@@ -614,6 +688,34 @@ def manage_integration(provider):
         is_global=is_global,
         config_schema=config_schema,
         current_config=current_config,
+    )
+
+
+@integrations_bp.route("/integrations/jira/backlog")
+@login_required
+def jira_sprint_backlog():
+    """Show the active sprint backlog (top-level issues) for the configured Jira board."""
+    service = IntegrationService()
+    integration = service.get_global_integration("jira")
+    if not integration:
+        flash(_("Jira integration is not configured."), "error")
+        return redirect(url_for("integrations.list_integrations"))
+
+    connector = service.get_connector(integration)
+    if not connector:
+        flash(_("Could not initialize Jira connector."), "error")
+        return redirect(url_for("integrations.manage_integration", provider="jira"))
+
+    result = connector.get_active_sprint_backlog()
+    if not result.get("success"):
+        flash(_("Could not load sprint backlog: %(message)s", message=result.get("message", "Unknown error")), "error")
+        return redirect(url_for("integrations.manage_integration", provider="jira"))
+
+    return render_template(
+        "integrations/jira_backlog.html",
+        board=result.get("board"),
+        sprint=result.get("sprint"),
+        issues=result.get("issues", []),
     )
 
 

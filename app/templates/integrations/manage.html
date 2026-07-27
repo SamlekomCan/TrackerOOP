@@ -171,6 +171,58 @@
     </div>
     {% endif %}
 
+    <!-- Jira Personal Access Token Setup (Admin only, alternative to OAuth for Jira Server/Data Center) -->
+    {% if current_user.is_admin and provider == 'jira' %}
+    <div class="bg-card-light dark:bg-card-dark p-6 rounded-lg shadow">
+        <h2 class="text-lg font-semibold mb-4">
+            <i class="fas fa-key mr-2"></i>{{ _('Personal Access Token (Jira Server / Data Center)') }}
+        </h2>
+        <p class="text-sm text-text-muted-light dark:text-text-muted-dark mb-4">
+            {{ _('If you use a self-hosted Jira (Server or Data Center) with a Personal Access Token, use this section instead of the OAuth section above. No OAuth app setup required.') }}
+        </p>
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="update_jira_pat_credentials">
+
+            <div class="space-y-4">
+                <div>
+                    <label for="jira_base_url" class="block text-sm font-medium mb-2">
+                        {{ _('Jira Base URL') }} <span class="text-red-500">*</span>
+                    </label>
+                    <input type="url"
+                           name="jira_base_url"
+                           id="jira_base_url"
+                           value="{{ current_config.get('jira_url', '') }}"
+                           class="w-full px-3 py-2 border border-border-light dark:border-border-dark rounded-lg bg-card-light dark:bg-card-dark"
+                           placeholder="https://jira.bri.co.id"
+                           required>
+                </div>
+
+                <div>
+                    <label for="jira_pat" class="block text-sm font-medium mb-2">
+                        {{ _('Personal Access Token') }} {% if not credentials %}<span class="text-red-500">*</span>{% endif %}
+                    </label>
+                    <input type="password"
+                           name="jira_pat"
+                           id="jira_pat"
+                           class="w-full px-3 py-2 border border-border-light dark:border-border-dark rounded-lg bg-card-light dark:bg-card-dark"
+                           placeholder="{{ _('Leave empty to keep current token') if credentials else _('Paste your Jira Personal Access Token') }}"
+                           {% if not credentials %}required{% endif %}>
+                    <p class="mt-1 text-xs text-text-muted-light dark:text-text-muted-dark">
+                        {{ _('Generate one in Jira under your Profile > Personal Access Tokens.') }}
+                    </p>
+                </div>
+            </div>
+
+            <div class="mt-6 flex gap-4">
+                <button type="submit" class="bg-primary text-white px-6 py-2 rounded-lg hover:bg-primary/90 transition-colors">
+                    <i class="fas fa-save mr-2"></i>{{ _('Save Personal Access Token') }}
+                </button>
+            </div>
+        </form>
+    </div>
+    {% endif %}
+
     <!-- CalDAV Credentials Section (non-OAuth, uses username/password) -->
     {% if provider == 'caldav_calendar' and active_integration %}
     <div class="bg-card-light dark:bg-card-dark p-6 rounded-lg shadow">
@@ -588,6 +640,11 @@
                 <a href="{{ url_for('integrations.view_integration', integration_id=active_integration.id) }}" class="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors inline-block">
                     <i class="fas fa-eye mr-2"></i>{{ _('View Details') }}
                 </a>
+                {% if provider == 'jira' %}
+                <a href="{{ url_for('integrations.jira_sprint_backlog') }}" class="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors inline-block">
+                    <i class="fas fa-list-check mr-2"></i>{{ _('Sprint Backlog') }}
+                </a>
+                {% endif %}
             </div>
             {% endif %}
         </div>

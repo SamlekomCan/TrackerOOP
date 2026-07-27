@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}{{ epic.name }}{% endblock %}
+
+{% block content %}
+<div class="px-4 sm:px-6 lg:px-8">
+  <div class="max-w-4xl mx-auto">
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h2 class="text-2xl font-bold flex items-center gap-2">
+          <span class="w-9 h-9 rounded-lg bg-primary flex items-center justify-center text-white"><i class="fas fa-layer-group"></i></span>
+          {{ epic.name }}
+        </h2>
+        <p class="text-text-muted-light dark:text-text-muted-dark">
+          <span class="chip {{ 'chip-success' if epic.status == 'active' else 'chip-neutral' }}">{{ epic.status|capitalize }}</span>
+        </p>
+      </div>
+      <a href="{{ url_for('deadlines.edit_epic', epic_id=epic.id) }}" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-border-light dark:border-border-dark">
+        <i class="fas fa-edit"></i> {{ _('Edit Epic') }}
+      </a>
+    </div>
+
+    {% if epic.description %}
+    <div class="bg-card-light dark:bg-card-dark rounded-xl shadow ring-1 ring-border-light/60 dark:ring-border-dark/60 p-6 mb-6">
+      <p class="text-sm">{{ epic.description }}</p>
+    </div>
+    {% endif %}
+
+    <div class="bg-card-light dark:bg-card-dark rounded-xl shadow ring-1 ring-border-light/60 dark:ring-border-dark/60 mb-6">
+      <div class="p-6 border-b border-border-light dark:border-border-dark">
+        <h3 class="font-semibold mb-3">{{ _('Add Story') }}</h3>
+        <form method="POST" action="{{ url_for('deadlines.create_story') }}" class="flex flex-col sm:flex-row gap-3">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="epic_id" value="{{ epic.id }}">
+          <input type="text" name="name" required placeholder="{{ _('Story name') }}" class="flex-1 rounded-lg border border-border-light dark:border-border-dark bg-background-light dark:bg-gray-700 px-3 py-2">
+          <input type="text" name="description" placeholder="{{ _('Description (optional)') }}" class="flex-1 rounded-lg border border-border-light dark:border-border-dark bg-background-light dark:bg-gray-700 px-3 py-2">
+          <button type="submit" class="px-4 py-2 rounded-lg bg-primary text-white hover:opacity-90 whitespace-nowrap"><i class="fas fa-plus"></i> {{ _('Add') }}</button>
+        </form>
+      </div>
+
+      <div class="p-0 overflow-x-auto">
+        <table class="min-w-full divide-y divide-border-light dark:divide-border-dark" role="table" aria-label="{{ _('Stories list') }}">
+          <thead>
+            <tr class="text-left text-sm">
+              <th scope="col" class="px-4 py-3">{{ _('Name') }}</th>
+              <th scope="col" class="px-4 py-3 w-28">{{ _('Status') }}</th>
+              <th scope="col" class="px-4 py-3 w-24">{{ _('Actions') }}</th>
+            </tr>
+          </thead>
+          <tbody role="rowgroup">
+            {% for story in stories %}
+            <tr role="row">
+              <td class="px-4 py-3">
+                <div class="font-medium">{{ story.name }}</div>
+                {% if story.description %}<div class="text-xs text-text-muted-light dark:text-text-muted-dark">{{ story.description }}</div>{% endif %}
+              </td>
+              <td class="px-4 py-3">
+                <span class="chip {{ 'chip-success' if story.status == 'done' else 'chip-neutral' }}">{{ story.status|capitalize }}</span>
+              </td>
+              <td class="px-4 py-3">
+                <a href="{{ url_for('deadlines.edit_story', story_id=story.id) }}" class="text-primary hover:underline">{{ _('Edit') }}</a>
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="3" class="px-4 py-6 text-center text-text-muted-light dark:text-text-muted-dark">{{ _('No stories yet.') }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <a href="{{ url_for('deadlines.list_epics') }}" class="text-primary hover:underline"><i class="fas fa-arrow-left"></i> {{ _('Back to Epics') }}</a>
+  </div>
+</div>
+{% endblock %}

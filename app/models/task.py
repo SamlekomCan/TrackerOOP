@@ -18,6 +18,13 @@ class Task(db.Model):
     priority = db.Column(db.String(20), default="medium", nullable=False)  # 'low', 'medium', 'high', 'urgent'
     estimated_hours = db.Column(db.Float, nullable=True)
     due_date = db.Column(db.Date, nullable=True, index=True)
+    due_time = db.Column(db.Time, nullable=True)  # informational only (e.g. a meeting time), set via Check-In
+    source = db.Column(
+        db.String(20), default="manual", nullable=True, index=True
+    )  # 'manual', 'check_in', reserved: 'trending_issue'
+    story_id = db.Column(
+        db.Integer, db.ForeignKey("stories.id", ondelete="SET NULL"), nullable=True, index=True
+    )  # set for tasks created via Check-In
     assigned_to = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True, index=True)
     created_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
     created_at = db.Column(db.DateTime, default=now_in_app_timezone, nullable=False)
@@ -30,6 +37,7 @@ class Task(db.Model):
     assigned_user = db.relationship("User", foreign_keys=[assigned_to], backref="assigned_tasks")
     creator = db.relationship("User", foreign_keys=[created_by], backref="created_tasks")
     time_entries = db.relationship("TimeEntry", backref="task", lazy="dynamic")
+    story = db.relationship("Story", backref="tasks")
     # comments relationship is defined via backref in Comment model
 
     def __init__(
@@ -43,6 +51,9 @@ class Task(db.Model):
         assigned_to=None,
         created_by=None,
         status="todo",
+        source="manual",
+        story_id=None,
+        due_time=None,
     ):
         self.project_id = project_id
         self.name = name.strip()
@@ -53,6 +64,9 @@ class Task(db.Model):
         self.assigned_to = assigned_to
         self.created_by = created_by
         self.status = status
+        self.source = source
+        self.story_id = story_id
+        self.due_time = due_time
 
     def __repr__(self):
         return f"<Task {self.name} ({self.status})>"

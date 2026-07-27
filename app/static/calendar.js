@@ -9,6 +9,8 @@ class Calendar {
         this.currentDate = new Date(options.currentDate || new Date());
         this.container = document.getElementById('calendarContainer');
         this.apiUrl = options.apiUrl;
+        this.dayPoTasksUrl = options.dayPoTasksUrl;
+        this.isAdminOrManager = !!options.isAdminOrManager;
         this.events = [];
         this.tasks = [];
         this.timeEntries = [];
@@ -60,7 +62,8 @@ class Calendar {
         // Modal close
         document.querySelectorAll('[data-dismiss="modal"]').forEach(btn => {
             btn.addEventListener('click', () => {
-                document.getElementById('eventModal').style.display = 'none';
+                const modalId = btn.dataset.modal || 'eventModal';
+                document.getElementById(modalId).style.display = 'none';
             });
         });
     }
@@ -416,10 +419,76 @@ class Calendar {
             cell.addEventListener('click', (e) => {
                 if (e.target.classList.contains('month-cell') || e.target.classList.contains('date-number')) {
                     const date = new Date(cell.dataset.date);
-                    window.location.href = `${window.calendarData.newEventUrl}?date=${date.toISOString().split('T')[0]}`;
+                    const dateStr = this.formatLocalDate(date);
+                    if (this.isAdminOrManager) {
+                        this.showDayPoTasks(dateStr);
+                    } else {
+                        window.location.href = `${window.calendarData.newEventUrl}?date=${dateStr}`;
+                    }
                 }
             });
         });
+    }
+
+    formatLocalDate(date) {
+        // Format using local calendar date components, avoiding the UTC shift
+        // that toISOString() introduces (which can land on the wrong day
+        // depending on the browser's timezone offset).
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+    }
+
+    async showDayPoTasks(dateStr) {
+        const modal = document.getElementById('dayPoTasksModal');
+        const title = document.getElementById('dayPoTasksTitle');
+        const body = document.getElementById('dayPoTasksBody');
+        if (!modal || !body) return;
+
+        title.textContent = `${this.escapeHtml('PO Activity')} — ${dateStr}`;
+        body.innerHTML = '<div class="text-center py-6"><i class="fas fa-spinner fa-spin"></i></div>';
+        modal.style.display = 'flex';
+
+        try {
+            const res = await fetch(`${this.dayPoTasksUrl}?date=${dateStr}`, { credentials: 'same-origin' });
+            const data = await res.json();
+
+            if (!res.ok) {
+                body.innerHTML = `<p style="color:#ef4444;">${this.escapeHtml(data.error || 'Failed to load')}</p>`;
+                return;
+            }
+
+            const mutedStyle = 'color:#9ca3af;';
+            const renderItem = (item, isMeeting) => {
+                const timeLabel = isMeeting ? `<span style="background:#0ea5e9;color:#fff;border-radius:4px;padding:2px 6px;font-size:0.8em;">${item.dueTime}</span> ` : '';
+                return `
+                    <div style="cursor:pointer; padding:8px 10px; border-radius:6px; margin-bottom:6px; background:rgba(148,163,184,0.08);" onclick="window.open('${item.url}', '_blank')">
+                        ${timeLabel}<strong>${this.escapeHtml(item.assigneeName)}</strong>: ${this.escapeHtml(item.name)}
+                        <span style="${mutedStyle}font-size:0.8em; display:block;">${this.escapeHtml(item.status)} &middot; ${this.escapeHtml(item.priority)}</span>
+                    </div>
+                `;
+            };
+
+            let html = '';
+            html += `<h4 style="margin-top:0;">📅 Meeting</h4>`;
+            if (data.meetings && data.meetings.length) {
+                html += data.meetings.map(m => renderItem(m, true)).join('');
+            } else {
+                html += `<p style="${mutedStyle}">No meetings scheduled.</p>`;
+            }
+
+            html += `<h4>📋 Other Tasks</h4>`;
+            if (data.other_tasks && data.other_tasks.length) {
+                html += data.other_tasks.map(t => renderItem(t, false)).join('');
+            } else {
+                html += `<p style="${mutedStyle}">No other tasks.</p>`;
+            }
+
+            body.innerHTML = html;
+        } catch (err) {
+            body.innerHTML = `<p style="color:#ef4444;">Failed to load PO activity.</p>`;
+        }
     }
     
     renderMonthCellEvents(day) {
@@ -521,7 +590,9 @@ document.addEventListener('DOMContentLoaded', () => {
         window.calendar = new Calendar({
             viewType: window.calendarData.viewType,
             currentDate: window.calendarData.currentDate,
-            apiUrl: window.calendarData.apiUrl
+            apiUrl: window.calendarData.apiUrl,
+            dayPoTasksUrl: window.calendarData.dayPoTasksUrl,
+            isAdminOrManager: window.calendarData.isAdminOrManager
         });
         
     }
