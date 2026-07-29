@@ -60,6 +60,12 @@ def dashboard():
     # Get user's active timer
     active_timer = current_user.active_timer
 
+    # Get recent entries for the user (using repository to avoid N+1)
+    from app.repositories import TimeEntryRepository
+
+    time_entry_repo = TimeEntryRepository()
+    recent_entries = time_entry_repo.get_by_user(user_id=current_user.id, limit=10, include_relations=True)
+
     # Get the user's checked-in tasks for the Upcoming Task widget
     from sqlalchemy.orm import joinedload
 
