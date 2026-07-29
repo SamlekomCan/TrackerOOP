@@ -237,6 +237,8 @@ def _register_optional_blueprints(app, logger=None):
         ("app.routes.recurring_tasks", "recurring_tasks_bp"),
         ("app.routes.team_chat", "team_chat_bp"),
         ("app.routes.client_portal_customization", "client_portal_customization_bp"),
+        ("app.routes.deadlines", "deadlines_bp"),
+        ("app.routes.trending_issues", "trending_issues_bp"),
     ]
     for module_path, attr in optional:
         try:

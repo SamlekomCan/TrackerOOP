@@ -168,6 +168,28 @@
         </div>
     </div>
 
+    <!-- PO Day Activity Modal (Admin/Manager only) -->
+    <div id="dayPoTasksModal" class="modal" style="display: none;">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3 class="modal-title" id="dayPoTasksTitle">{{ _('PO Activity') }}</h3>
+                    <button type="button" class="close" data-dismiss="modal" data-modal="dayPoTasksModal">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="modal-body" id="dayPoTasksBody">
+                    <!-- Meetings and other tasks will be loaded here -->
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal" data-modal="dayPoTasksModal">
+                        {{ _('Close') }}
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
 <!-- Pass data to JavaScript -->
 <script nonce="{{ csp_nonce() }}">
     window.calendarData = {
@@ -186,7 +208,9 @@
             task: '{{ type_colors.task }}',
             time_entry: '{{ type_colors.time_entry }}'
         },
-        preferencesUrl: '{{ url_for('user.update_preferences') }}'
+        preferencesUrl: '{{ url_for('user.update_preferences') }}',
+        dayPoTasksUrl: '/api/calendar/day-po-tasks',
+        isAdminOrManager: {{ (current_user.is_admin or current_user.role == 'manager' or 'manager' in current_user.get_role_names())|tojson }}
     };
 </script>
 {% endblock %}

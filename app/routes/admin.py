@@ -825,6 +825,13 @@ def list_users():
     return render_template("admin/users.html", users=users, stats=stats)
 
 
+# Roles shown in the user create/edit form; other legacy roles (user, viewer,
+# super_admin) still work for existing accounts but are no longer offered here.
+VISIBLE_ROLE_NAMES = ["admin", "manager", "po"]
+# Only admins can create or assign these roles.
+ADMIN_ONLY_ROLE_NAMES = {"manager", "po"}
+
+
 @admin_bp.route("/admin/users/create", methods=["GET", "POST"])
 @login_required
 @admin_or_permission_required("create_users")
@@ -835,19 +842,26 @@ def create_user():
             flash(_("User creation is disabled in demo mode."), "error")
             return redirect(url_for("admin.list_users"))
         username = request.form.get("username", "").strip().lower()
+        full_name = request.form.get("full_name", "").strip()
         role_name = request.form.get("role", "user")  # This will be a role name from the Role system
         default_password = request.form.get("default_password", "").strip()
         force_password_change = request.form.get("force_password_change") == "on"
 
         if not username:
             flash(_("Username is required"), "error")
-            all_roles = Role.query.order_by(Role.name).all()
+            all_roles = Role.query.filter(Role.name.in_(VISIBLE_ROLE_NAMES)).order_by(Role.name).all()
             return render_template("admin/user_form.html", user=None, all_roles=all_roles)
 
         # Check if user already exists
         if User.query.filter_by(username=username).first():
             flash(_("User already exists"), "error")
-            all_roles = Role.query.order_by(Role.name).all()
+            all_roles = Role.query.filter(Role.name.in_(VISIBLE_ROLE_NAMES)).order_by(Role.name).all()
+            return render_template("admin/user_form.html", user=None, all_roles=all_roles)
+
+        # Manager and PO accounts can only be created by admins
+        if role_name in ADMIN_ONLY_ROLE_NAMES and not current_user.is_admin:
+            flash(_("Only administrators can create users with the Manager or PO role"), "error")
+            all_roles = Role.query.filter(Role.name.in_(VISIBLE_ROLE_NAMES)).order_by(Role.name).all()
             return render_template("admin/user_form.html", user=None, all_roles=all_roles)
 
         # Get the Role object from the database
@@ -861,7 +875,7 @@ def create_user():
                 return render_template("admin/user_form.html", user=None, all_roles=all_roles)
 
         # Create user with legacy role field for backward compatibility
-        user = User(username=username, role=role_name)
+        user = User(username=username, role=role_name, full_name=full_name or None)
         # Apply company default for daily working hours (overtime)
         try:
             settings = Settings.get_settings()
@@ -888,7 +902,7 @@ def create_user():
         return redirect(url_for("admin.list_users"))
 
     # GET request - show form with available roles
-    all_roles = Role.query.order_by(Role.name).all()
+    all_roles = Role.query.filter(Role.name.in_(VISIBLE_ROLE_NAMES)).order_by(Role.name).all()
     return render_template("admin/user_form.html", user=None, all_roles=all_roles)
 
 
@@ -906,6 +920,7 @@ def edit_user(user_id):
 
     if request.method == "POST":
         username = request.form.get("username", "").strip().lower()
+        full_name = request.form.get("full_name", "").strip()
         role_name = request.form.get("role", "user")  # This will be a role name from the Role system
         is_active = request.form.get("is_active") == "on"
         client_portal_enabled = request.form.get("client_portal_enabled") == "on"
@@ -921,6 +936,11 @@ def edit_user(user_id):
                 all_roles=all_roles,
                 assigned_client_ids=assigned_client_ids,
             )
+
+        # Manager and PO roles can only be assigned by admins
+        if role_name in ADMIN_ONLY_ROLE_NAMES and not current_user.is_admin:
+            flash(_("Only administrators can assign the Manager or PO role"), "error")
+            return render_template("admin/user_form.html", user=user, clients=clients, all_roles=all_roles)
 
         # Check if username is already taken by another user
         existing_user = User.query.filter_by(username=username).first()
@@ -997,6 +1017,7 @@ def edit_user(user_id):
 
         # Update user
         user.username = username
+        user.full_name = full_name or None
         # Update legacy role field for backward compatibility
         user.role = role_name
 
@@ -1051,6 +1072,52 @@ def edit_user(user_id):
     return render_template(
         "admin/user_form.html", user=user, clients=clients, all_roles=all_roles, assigned_client_ids=assigned_client_ids
     )
+
+
+@admin_bp.route("/admin/quick-switch-role", methods=["POST"])
+@login_required
+def quick_switch_role():
+    """Let an admin quickly switch their own role to Admin/Manager/PO for testing purposes."""
+    if not current_user.is_admin:
+        flash(_("Only administrators can switch roles"), "error")
+        return redirect(request.referrer or url_for("main.dashboard"))
+
+    role_name = request.form.get("role", "")
+    if role_name not in VISIBLE_ROLE_NAMES:
+        flash(_("Invalid role"), "error")
+        return redirect(request.referrer or url_for("main.dashboard"))
+
+    role_obj = Role.query.filter_by(name=role_name).first()
+    if not role_obj:
+        flash(_("Role not found"), "error")
+        return redirect(request.referrer or url_for("main.dashboard"))
+
+    current_user.role = role_name
+    if role_obj not in current_user.roles:
+        if not current_user.roles:
+            current_user.roles.append(role_obj)
+        else:
+            current_user.roles[0] = role_obj
+    elif current_user.roles[0] != role_obj:
+        current_user.roles.remove(role_obj)
+        current_user.roles.insert(0, role_obj)
+
+    if not safe_commit("admin_quick_switch_role", {"user_id": current_user.id}):
+        flash(_("Could not switch role due to a database error. Please check server logs."), "error")
+        return redirect(request.referrer or url_for("main.dashboard"))
+
+    if role_name == "admin":
+        flash(_("Switched to Admin role"), "success")
+    else:
+        flash(
+            _(
+                "Switched to %(role)s role for testing. You'll lose admin access until an "
+                "administrator switches you back via Edit User.",
+                role=role_name.upper() if role_name == "po" else role_name.capitalize(),
+            ),
+            "success",
+        )
+    return redirect(request.referrer or url_for("main.dashboard"))
 
 
 @admin_bp.route("/admin/users/<int:user_id>/delete", methods=["POST"])

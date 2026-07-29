@@ -19,13 +19,19 @@
                 <input type="text" name="username" id="username" value="{{ user.username if user else '' }}" required class="form-input">
             </div>
             <div>
+                <label for="full_name" class="form-label">{{ _('Name') }}</label>
+                <input type="text" name="full_name" id="full_name" value="{{ user.full_name if user else '' }}" class="form-input" placeholder="{{ _('Full name shown throughout the app') }}">
+            </div>
+            <div>
                 <label for="role" class="form-label">Role</label>
                 <select name="role" id="role" class="form-input">
                     {% if all_roles %}
                         {% for role in all_roles %}
+                            {% if role.name not in ('manager', 'po') or current_user.is_admin %}
                             <option value="{{ role.name }}" {% if user and user.roles and user.roles|length > 0 and role == user.roles[0] %}selected{% elif user and not user.roles and role.name == user.role %}selected{% elif not user and role.name == 'user' %}selected{% endif %}>
-                                {{ role.name|capitalize }}{% if role.is_system_role %} (System){% endif %}
+                                {{ 'PO' if role.name == 'po' else role.name|capitalize }}{% if role.is_system_role %} (System){% endif %}
                             </option>
+                            {% endif %}
                         {% endfor %}
                     {% else %}
                         {# Fallback to legacy roles if Role system not initialized #}

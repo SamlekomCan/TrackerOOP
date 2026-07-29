@@ -969,6 +969,7 @@
     <script src="{{ asset_url('core-e') }}"></script>
     
     <script nonce="{{ csp_nonce() }}">
+
         // Global helpers for bulk menus and confirmation using custom modal (no native confirm)
         window.showConfirm = function(message, opts){
             try {
@@ -1259,7 +1260,9 @@ function trackBannerImpression(source) {
             {% endif %}
         }
     </script>
-    
+
+    <script src="{{ url_for('static', filename='data-tables-enhanced.js') }}"></script>
+
     {% block scripts_extra %}{% endblock %}
     {% include 'partials/_bottom_nav.html' %}
     <script nonce="{{ csp_nonce() }}">

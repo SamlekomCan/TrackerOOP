@@ -32,8 +32,41 @@ class JiraConnector(BaseConnector):
     def provider_name(self) -> str:
         return "jira"
 
+    def _get_api_base(self) -> str:
+        """Get the REST API base URL, versioned according to auth method.
+
+        Jira Server/Data Center (used with a Personal Access Token) reliably
+        supports API v2. API v3 (ADF descriptions) is a Cloud-only guarantee.
+        """
+        base_url = self.integration.config.get("jira_url", "https://your-domain.atlassian.net").rstrip("/")
+        api_version = "2" if self.integration.config.get("auth_method") == "pat" else "3"
+        return f"{base_url}/rest/api/{api_version}"
+
+    @staticmethod
+    def _extract_description_text(description) -> Optional[str]:
+        """Extract plain text from a Jira description field.
+
+        API v2 (Server/Data Center) returns a plain string; API v3 (Cloud)
+        returns an Atlassian Document Format (ADF) dict.
+        """
+        if not description:
+            return None
+        if isinstance(description, str):
+            return description
+        if isinstance(description, dict):
+            try:
+                content = description.get("content", [])
+                if content and content[0].get("content"):
+                    return content[0]["content"][0].get("text", "")
+            except (IndexError, AttributeError, KeyError):
+                return None
+        return None
+
     def get_authorization_url(self, redirect_uri: str, state: str = None) -> str:
         """Get Jira OAuth authorization URL."""
+        if self.integration.config.get("auth_method") == "pat":
+            raise ValueError("This Jira integration uses a Personal Access Token; OAuth is not applicable.")
+
         # Jira uses OAuth 2.0
         from app.models import Settings
 
@@ -59,6 +92,9 @@ class JiraConnector(BaseConnector):
 
     def exchange_code_for_tokens(self, code: str, redirect_uri: str) -> Dict[str, Any]:
         """Exchange authorization code for tokens."""
+        if self.integration.config.get("auth_method") == "pat":
+            raise ValueError("This Jira integration uses a Personal Access Token; OAuth is not applicable.")
+
         from app.models import Settings
 
         settings = Settings.get_settings()
@@ -101,6 +137,8 @@ class JiraConnector(BaseConnector):
 
     def refresh_access_token(self) -> Dict[str, Any]:
         """Refresh access token."""
+        if self.integration.config.get("auth_method") == "pat":
+            raise ValueError("This Jira integration uses a Personal Access Token; OAuth is not applicable.")
         if not self.credentials or not self.credentials.refresh_token:
             raise ValueError("No refresh token available")
 
@@ -143,8 +181,7 @@ class JiraConnector(BaseConnector):
         if not token:
             return {"success": False, "message": "No access token available"}
 
-        base_url = self.integration.config.get("jira_url", "https://your-domain.atlassian.net")
-        api_url = f"{base_url}/rest/api/3/myself"
+        api_url = f"{self._get_api_base()}/myself"
 
         try:
             response = requests.get(api_url, headers={"Authorization": f"Bearer {token}", "Accept": "application/json"})
@@ -261,8 +298,7 @@ class JiraConnector(BaseConnector):
         except ValueError as e:
             return {"success": False, "message": str(e)}
 
-        base_url = self.integration.config.get("jira_url", "https://your-domain.atlassian.net")
-        api_url = f"{base_url}/rest/api/3/search"
+        api_url = f"{self._get_api_base()}/search"
 
         synced_count = 0
         errors = []
@@ -334,8 +370,7 @@ class JiraConnector(BaseConnector):
         except ValueError as e:
             return {"success": False, "message": str(e), "issue_key": issue_key}
 
-        base_url = self.integration.config.get("jira_url", "https://your-domain.atlassian.net")
-        api_url = f"{base_url}/rest/api/3/issue/{issue_key}"
+        api_url = f"{self._get_api_base()}/issue/{issue_key}"
         fields = "summary,description,status,assignee,project,created,updated"
 
         try:
@@ -380,6 +415,96 @@ class JiraConnector(BaseConnector):
                 "message": str(e),
                 "issue_key": issue_key,
             }
+
+    def get_active_sprint_backlog(self) -> Dict[str, Any]:
+        """Fetch the active sprint's top-level issues (stories/tasks, no sub-tasks) for a configured board."""
+        token = self.get_access_token()
+        if not token:
+            return {"success": False, "message": "No access token available"}
+
+        board_name = (self.integration.config.get("jira_board_name") or "").strip()
+        if not board_name:
+            return {
+                "success": False,
+                "message": "No Jira board configured. Set 'Board Name' in the Integration Configuration section.",
+            }
+
+        base_url = self.integration.config.get("jira_url", "").rstrip("/")
+        story_points_field = self.integration.config.get("jira_story_points_field") or "customfield_10106"
+        headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
+
+        try:
+            board_resp = requests.get(f"{base_url}/rest/agile/1.0/board", headers=headers, params={"name": board_name})
+            if board_resp.status_code != 200:
+                return {"success": False, "message": f"Could not look up board: HTTP {board_resp.status_code}"}
+
+            boards = board_resp.json().get("values", [])
+            board = next((b for b in boards if b.get("name", "").lower() == board_name.lower()), None)
+            if not board:
+                return {"success": False, "message": f"No board found named '{board_name}'"}
+
+            sprint_resp = requests.get(
+                f"{base_url}/rest/agile/1.0/board/{board['id']}/sprint",
+                headers=headers,
+                params={"state": "active"},
+            )
+            if sprint_resp.status_code != 200:
+                return {"success": False, "message": f"Could not fetch active sprint: HTTP {sprint_resp.status_code}"}
+
+            sprints = sprint_resp.json().get("values", [])
+            if not sprints:
+                return {
+                    "success": True,
+                    "board": {"id": board["id"], "name": board["name"]},
+                    "sprint": None,
+                    "issues": [],
+                }
+            sprint = sprints[0]
+
+            issues_resp = requests.get(
+                f"{base_url}/rest/agile/1.0/sprint/{sprint['id']}/issue",
+                headers=headers,
+                params={
+                    "fields": f"summary,status,issuetype,assignee,{story_points_field},fixVersions",
+                    "jql": "issuetype not in subtaskIssueTypes()",
+                    "maxResults": 200,
+                },
+            )
+            if issues_resp.status_code != 200:
+                return {"success": False, "message": f"Could not fetch sprint issues: HTTP {issues_resp.status_code}"}
+
+            issues = []
+            for issue in issues_resp.json().get("issues", []):
+                f = issue.get("fields", {})
+                status = f.get("status", {}) or {}
+                issues.append(
+                    {
+                        "key": issue.get("key"),
+                        "url": f"{base_url}/browse/{issue.get('key')}",
+                        "summary": f.get("summary", ""),
+                        "type": (f.get("issuetype") or {}).get("name", ""),
+                        "status": status.get("name", ""),
+                        "status_category": (status.get("statusCategory") or {}).get("colorName", "default"),
+                        "story_points": f.get(story_points_field),
+                        "assignee": (f.get("assignee") or {}).get("displayName"),
+                        "release": [fv.get("name") for fv in f.get("fixVersions", [])],
+                    }
+                )
+
+            return {
+                "success": True,
+                "board": {"id": board["id"], "name": board["name"]},
+                "sprint": {
+                    "id": sprint["id"],
+                    "name": sprint.get("name"),
+                    "goal": sprint.get("goal"),
+                    "start_date": sprint.get("startDate"),
+                    "end_date": sprint.get("endDate"),
+                },
+                "issues": issues,
+            }
+        except Exception as e:
+            return {"success": False, "message": f"Error fetching sprint backlog: {str(e)}"}
 
     def _map_jira_status(self, jira_status: str) -> str:
         """Map Jira status to TimeTracker task status."""
@@ -548,6 +673,25 @@ class JiraConnector(BaseConnector):
                     "description": "Filter which issues to sync from Jira",
                 },
                 {
+                    "name": "jira_board_name",
+                    "label": "Board Name (Sprint Backlog view)",
+                    "type": "text",
+                    "required": False,
+                    "placeholder": "Ironman",
+                    "description": "Name of the Jira Scrum board whose active sprint backlog should be displayed",
+                    "help": "Used by the 'Sprint Backlog' view to look up the board's currently active sprint.",
+                },
+                {
+                    "name": "jira_story_points_field",
+                    "label": "Story Points Field ID",
+                    "type": "text",
+                    "required": False,
+                    "default": "customfield_10106",
+                    "placeholder": "customfield_10106",
+                    "description": "Custom field ID for Story Points in your Jira instance",
+                    "help": "Leave as the default unless your Jira admin tells you it's different.",
+                },
+                {
                     "name": "sync_direction",
                     "type": "select",
                     "label": "Sync Direction",
@@ -628,7 +772,13 @@ class JiraConnector(BaseConnector):
                 {
                     "title": "Connection Settings",
                     "description": "Configure your Jira connection",
-                    "fields": ["jira_url", "jql", "webhook_secret"],
+                    "fields": [
+                        "jira_url",
+                        "jql",
+                        "webhook_secret",
+                        "jira_board_name",
+                        "jira_story_points_field",
+                    ],
                 },
                 {
                     "title": "Sync Settings",

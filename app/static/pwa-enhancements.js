@@ -35,9 +35,6 @@ class PWAEnhancements {
         // Setup offline detection
         this.setupOfflineDetection();
 
-        // Setup install prompt
-        this.setupInstallPrompt();
-
         // Setup push notifications
         if ('PushManager' in window) {
             await this.setupPushNotifications();

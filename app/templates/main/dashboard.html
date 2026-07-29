@@ -402,8 +402,79 @@
 </div>
 
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-    <!-- Left Column: Recent Entries -->
-    <div class="lg:col-span-2">
+    <!-- Left Column: Upcoming Task, Recent Entries & Deadline -->
+    <div class="lg:col-span-2 space-y-6">
+        <!-- Upcoming Task (Check-In / Check-Out daily task list) -->
+        <div class="bg-card-light dark:bg-card-dark p-6 rounded-lg shadow-md dashboard-widget animated-card">
+            <div class="flex items-center justify-between mb-2">
+                <h2 class="text-lg font-semibold">{{ _('Upcoming Task') }}</h2>
+                <div class="flex gap-2">
+                    <button type="button" id="openCheckIn" class="bg-green-600 text-white px-4 py-2 rounded-lg btn-press shadow-md transition-smooth">{{ _('Check-In') }}</button>
+                    {% if upcoming_checkin_tasks %}
+                    <button type="button" id="openCheckOut" class="bg-amber-600 text-white px-4 py-2 rounded-lg btn-press shadow-md transition-smooth">{{ _('Check-Out') }}</button>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left responsive-cards">
+                    <thead class="border-b-2 border-border-light dark:border-border-dark">
+                        <tr>
+                            <th class="p-4">{{ _('Task') }}</th>
+                            <th class="p-4">{{ _('Epic') }} &rsaquo; {{ _('Story') }}</th>
+                            <th class="p-4">{{ _('Due') }}</th>
+                            <th class="p-4">{{ _('Actions') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for task in upcoming_checkin_tasks %}
+                        <tr class="border-b border-border-light dark:border-border-dark">
+                            <td class="p-4 font-medium">{{ task.name }}</td>
+                            <td class="p-4">
+                                {% if task.story %}
+                                <span class="text-sm">{{ task.story.epic.name }} &rsaquo; {{ task.story.name }}</span>
+                                {% else %}
+                                <span class="text-text-muted-light dark:text-text-muted-dark">—</span>
+                                {% endif %}
+                            </td>
+                            <td class="p-4">
+                                {% if task.due_date %}
+                                <span class="chip {{ 'chip-danger' if task.due_date < today else ('chip-warning' if task.due_date == today else 'chip-neutral') }}">
+                                    {{ task.due_date.strftime('%b %d') }}{% if task.due_time %} &middot; {{ task.due_time.strftime('%H:%M') }}{% endif %}
+                                </span>
+                                {% else %}
+                                <span class="text-text-muted-light dark:text-text-muted-dark">—</span>
+                                {% endif %}
+                            </td>
+                            <td class="p-4">
+                                <div class="flex items-center gap-3">
+                                    <button type="button"
+                                            class="text-sm text-primary hover:underline update-trigger"
+                                            data-task-id="{{ task.id }}"
+                                            data-task-name="{{ task.name }}"
+                                            data-due-date="{{ task.due_date.isoformat() if task.due_date else '' }}"
+                                            title="{{ _('Update follow-up') }}">
+                                        <i class="fas fa-pen mr-1"></i>{{ _('Update') }}
+                                    </button>
+                                    <form method="POST" action="{{ url_for('tasks.delete_checkin_task', task_id=task.id) }}" class="inline" onsubmit="return confirm('{{ _('Remove this check-in from your Upcoming Tasks?') }}');">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <button type="submit" class="text-sm text-red-600 hover:underline" title="{{ _('Delete') }}">
+                                            <i class="fas fa-trash mr-1"></i>{{ _('Delete') }}
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="4" class="p-4 text-center text-text-muted-light dark:text-text-muted-dark">{{ _('No upcoming tasks. Use Check-In to add one.') }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Recent Entries -->
         <div class="bg-card-light dark:bg-card-dark p-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 dashboard-widget animated-card">
             <div class="flex items-center justify-between mb-4">
                 <div class="flex items-center gap-3">
@@ -483,6 +554,111 @@
                                     <p class="text-sm text-text-muted-light dark:text-text-muted-dark">{{ _('Start tracking time to see entries here.') }}</p>
                                 </div>
                             </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Deadline -->
+        <div class="bg-card-light dark:bg-card-dark p-6 rounded-lg shadow-md dashboard-widget animated-card">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-lg font-semibold">{{ _('Deadline') }}</h2>
+                <a href="{{ url_for('deadlines.list_epics') }}" class="text-sm text-primary hover:underline">{{ _('View all') }} &rarr;</a>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left">
+                    <thead class="border-b border-border-light dark:border-border-dark">
+                        <tr>
+                            <th class="p-4">{{ _('Tanggal Deadline') }}</th>
+                            <th class="p-4">{{ _('Nama Epic/Fitur') }}</th>
+                            <th class="p-4">{{ _('Tindak Lanjut') }}</th>
+                            <th class="p-4">{{ _('Actions') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for epic in epics %}
+                        <tr class="border-b border-border-light dark:border-border-dark">
+                            <td class="p-4">
+                                {% if epic.deadline_date %}
+                                    {% set days_left = (epic.deadline_date - today).days %}
+                                    <span class="chip {{ 'chip-danger' if days_left < 0 else ('chip-warning' if days_left <= 7 else 'chip-neutral') }}">
+                                        {{ epic.deadline_date.strftime('%b %d, %Y') }}
+                                    </span>
+                                {% else %}
+                                    <span class="text-text-muted-light dark:text-text-muted-dark">&mdash;</span>
+                                {% endif %}
+                            </td>
+                            <td class="p-4 font-medium">{{ epic.name }}</td>
+                            <td class="p-4">
+                                {% if epic.next_follow_up_date or epic.follow_up_notes %}
+                                    <div class="text-sm">{{ (epic.follow_up_notes or '')[:60] }}{% if epic.follow_up_notes and epic.follow_up_notes|length > 60 %}...{% endif %}</div>
+                                    {% if epic.next_follow_up_date %}
+                                    <div class="text-xs text-text-muted-light dark:text-text-muted-dark">{{ _('Next:') }} {{ epic.next_follow_up_date.strftime('%b %d, %Y') }}</div>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="chip chip-neutral">{{ _('Not yet followed up') }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="p-4">
+                                <a href="{{ url_for('deadlines.view_epic', epic_id=epic.id) }}" class="text-primary hover:underline">{{ _('View') }}</a>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="4" class="p-4 text-center text-text-muted-light dark:text-text-muted-dark">{{ _('No epics yet.') }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Trending Issue -->
+        <div class="bg-card-light dark:bg-card-dark p-6 rounded-lg shadow-md dashboard-widget animated-card">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-lg font-semibold">{{ _('Trending Issue') }}</h2>
+                <div class="flex items-center gap-3">
+                    {% if current_user.is_admin or current_user.has_permission('manage_trending_issues') %}
+                    <a href="{{ url_for('trending_issues.create_trending_issue') }}" class="text-sm bg-primary text-white px-3 py-1.5 rounded-lg btn-press shadow-md transition-smooth">
+                        <i class="fas fa-plus mr-1"></i>{{ _('Add Issue') }}
+                    </a>
+                    {% endif %}
+                    <a href="{{ url_for('trending_issues.list_trending_issues') }}" class="text-sm text-primary hover:underline">{{ _('View all') }} &rarr;</a>
+                </div>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left">
+                    <thead class="border-b border-border-light dark:border-border-dark">
+                        <tr>
+                            <th class="p-4">{{ _('Nama Issue') }}</th>
+                            <th class="p-4">{{ _('PIC') }}</th>
+                            <th class="p-4">{{ _('Detail Issue') }}</th>
+                            <th class="p-4">{{ _('Actions') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for issue in trending_issues %}
+                        <tr class="border-b border-border-light dark:border-border-dark">
+                            <td class="p-4 font-medium">
+                                {{ issue.name }}
+                                {% if issue.status == 'resolved' %}
+                                <span class="chip chip-success ml-2">{{ _('Resolved') }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="p-4">{{ issue.pic.display_name if issue.pic else '—' }}</td>
+                            <td class="p-4">
+                                <span class="text-sm">{{ (issue.detail or '')[:60] }}{% if issue.detail and issue.detail|length > 60 %}...{% endif %}</span>
+                                {% if not issue.detail %}<span class="text-text-muted-light dark:text-text-muted-dark">—</span>{% endif %}
+                            </td>
+                            <td class="p-4">
+                                <a href="{{ url_for('trending_issues.view_trending_issue', issue_id=issue.id) }}" class="text-primary hover:underline">{{ _('View') }}</a>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="4" class="p-4 text-center text-text-muted-light dark:text-text-muted-dark">{{ _('No trending issues yet.') }}</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -879,6 +1055,146 @@
     {% endset %}
     {{ modal('createTaskModal', _('Create task'), create_task_modal_content, create_task_modal_footer, 'sm') }}
     {% include 'workday/_overnight_clock_out_modal.html' %}
+
+    <div id="checkInModal" class="fixed inset-0 z-50 hidden">
+        <div class="absolute inset-0 bg-black/50" data-overlay></div>
+        <div class="relative max-w-lg mx-auto mt-24 bg-card-light dark:bg-card-dark text-text-light dark:text-text-dark rounded-lg shadow-lg">
+            <div class="p-4 border-b border-border-light dark:border-border-dark flex items-center justify-between">
+                <div class="text-lg font-semibold">{{ _('Check-In') }}</div>
+                <button type="button" data-close class="px-2 py-1 text-sm hover:bg-background-light dark:hover:bg-background-dark rounded">{{ _('Close') }}</button>
+            </div>
+            <form method="POST" action="{{ url_for('tasks.check_in') }}" class="p-4">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="space-y-4">
+                    <div id="checkInPickFields" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label for="checkInEpic" class="block text-sm font-medium text-gray-700 dark:text-gray-300">{{ _('Epic') }}</label>
+                            <select id="checkInEpic" class="form-input">
+                                <option value="">{{ _('Select an epic') }}</option>
+                                {% for epic in epics %}
+                                <option value="{{ epic.id }}">{{ epic.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div>
+                            <label for="checkInStory" class="block text-sm font-medium text-gray-700 dark:text-gray-300">{{ _('Story') }}</label>
+                            <select id="checkInStory" name="story_id" required disabled class="form-input">
+                                <option value="">{{ _('Select an epic first') }}</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="checkInManualFields" class="grid grid-cols-1 md:grid-cols-2 gap-4 hidden">
+                        <div>
+                            <label for="checkInNewEpicName" class="block text-sm font-medium text-gray-700 dark:text-gray-300">{{ _('New Epic name') }}</label>
+                            <input type="text" id="checkInNewEpicName" name="new_epic_name" class="form-input w-full" placeholder="{{ _('e.g. Mobile App Redesign') }}">
+                        </div>
+                        <div>
+                            <label for="checkInNewStoryName" class="block text-sm font-medium text-gray-700 dark:text-gray-300">{{ _('New Story name') }}</label>
+                            <input type="text" id="checkInNewStoryName" name="new_story_name" class="form-input w-full" placeholder="{{ _('e.g. Redesign dashboard UI') }}">
+                        </div>
+                        <p class="md:col-span-2 text-xs text-text-muted-light dark:text-text-muted-dark">
+                            {{ _('If the Epic or Story does not exist yet, it will be created automatically.') }}
+                        </p>
+                    </div>
+                    <button type="button" id="checkInToggleManual" class="text-sm text-primary hover:underline">
+                        {{ _("Can't find your Epic/Story? Enter it manually") }}
+                    </button>
+                    <div>
+                        <label for="checkInName" class="block text-sm font-medium text-gray-700 dark:text-gray-300">{{ _('Task') }}</label>
+                        <input type="text" id="checkInName" name="name" required class="form-input w-full" placeholder="{{ _('What do you need to follow up on?') }}">
+                    </div>
+                    <div>
+                        <label for="checkInDescription" class="block text-sm font-medium text-gray-700 dark:text-gray-300">{{ _('Notes (optional)') }}</label>
+                        <textarea id="checkInDescription" name="description" rows="2" class="form-input"></textarea>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label for="checkInDueDate" class="block text-sm font-medium text-gray-700 dark:text-gray-300">{{ _('Follow-up date') }}</label>
+                            <input type="date" id="checkInDueDate" name="due_date" class="form-input" value="{{ today_iso }}">
+                        </div>
+                        <div>
+                            <label for="checkInMeetingTime" class="block text-sm font-medium text-gray-700 dark:text-gray-300">{{ _('Meeting time (optional)') }}</label>
+                            <input type="time" id="checkInMeetingTime" name="meeting_time" class="form-input">
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-6 flex justify-end">
+                    <button type="submit" class="bg-green-600 text-white px-4 py-2 rounded-lg">{{ _('Check-In') }}</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="checkOutModal" class="fixed inset-0 z-50 hidden">
+        <div class="absolute inset-0 bg-black/50" data-overlay></div>
+        <div class="relative max-w-lg mx-auto mt-24 bg-card-light dark:bg-card-dark text-text-light dark:text-text-dark rounded-lg shadow-lg">
+            <div class="p-4 border-b border-border-light dark:border-border-dark flex items-center justify-between">
+                <div class="text-lg font-semibold">{{ _('Check-Out') }}</div>
+                <button type="button" data-close class="px-2 py-1 text-sm hover:bg-background-light dark:hover:bg-background-dark rounded">{{ _('Close') }}</button>
+            </div>
+            <form method="POST" action="{{ url_for('tasks.check_out') }}" class="p-4">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="space-y-4">
+                    <div>
+                        <label for="checkOutTask" class="block text-sm font-medium text-gray-700 dark:text-gray-300">{{ _('Task') }}</label>
+                        <select id="checkOutTask" name="task_id" required class="form-input">
+                            <option value="">{{ _('Select a task') }}</option>
+                            {% for task in upcoming_checkin_tasks %}
+                            <option value="{{ task.id }}">{{ task.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label for="checkOutNote" class="block text-sm font-medium text-gray-700 dark:text-gray-300">{{ _('Follow-up note') }}</label>
+                        <textarea id="checkOutNote" name="note" required rows="3" class="form-input"></textarea>
+                    </div>
+                    <div class="space-y-2">
+                        <label class="flex items-center gap-2">
+                            <input type="radio" name="resolution" value="followup" checked class="checkout-resolution">
+                            {{ _('Set new follow-up date') }}
+                        </label>
+                        <input type="date" id="checkOutNextDate" name="next_due_date" class="form-input">
+                        <label class="flex items-center gap-2">
+                            <input type="radio" name="resolution" value="done" class="checkout-resolution">
+                            {{ _('No further follow-up needed (close task)') }}
+                        </label>
+                    </div>
+                </div>
+                <div class="mt-6 flex justify-end">
+                    <button type="submit" class="bg-amber-600 text-white px-4 py-2 rounded-lg">{{ _('Submit') }}</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="updateCheckinModal" class="fixed inset-0 z-50 hidden">
+        <div class="absolute inset-0 bg-black/50" data-overlay></div>
+        <div class="relative max-w-lg mx-auto mt-24 bg-card-light dark:bg-card-dark text-text-light dark:text-text-dark rounded-lg shadow-lg">
+            <div class="p-4 border-b border-border-light dark:border-border-dark flex items-center justify-between">
+                <div class="text-lg font-semibold">{{ _('Update Follow-up') }}</div>
+                <button type="button" data-close class="px-2 py-1 text-sm hover:bg-background-light dark:hover:bg-background-dark rounded">{{ _('Close') }}</button>
+            </div>
+            <form method="POST" action="{{ url_for('tasks.check_out') }}" class="p-4">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="resolution" value="followup">
+                <input type="hidden" id="updateCheckinTaskId" name="task_id" value="">
+                <div class="space-y-4">
+                    <div class="font-medium" id="updateCheckinTaskName"></div>
+                    <div>
+                        <label for="updateCheckinNote" class="block text-sm font-medium text-gray-700 dark:text-gray-300">{{ _('Follow-up note') }}</label>
+                        <textarea id="updateCheckinNote" name="note" required rows="3" class="form-input" placeholder="{{ _('What is the latest progress?') }}"></textarea>
+                    </div>
+                    <div>
+                        <label for="updateCheckinDueDate" class="block text-sm font-medium text-gray-700 dark:text-gray-300">{{ _('Next follow-up date') }}</label>
+                        <input type="date" id="updateCheckinDueDate" name="next_due_date" required class="form-input">
+                    </div>
+                </div>
+                <div class="mt-6 flex justify-end">
+                    <button type="submit" class="bg-primary text-white px-4 py-2 rounded-lg">{{ _('Save') }}</button>
+                </div>
+            </form>
+        </div>
+    </div>
 {% endblock %}
 
 
@@ -1760,7 +2076,118 @@
         });
 
     }
-});
+
+        const checkInModal = document.getElementById('checkInModal');
+        document.addEventListener('click', (e) => {
+            const btn = e.target.closest('#openCheckIn');
+            if (btn && checkInModal) { e.preventDefault(); checkInModal.classList.remove('hidden'); }
+        });
+        if (checkInModal) {
+            checkInModal.querySelector('[data-close]')?.addEventListener('click', () => checkInModal.classList.add('hidden'));
+            checkInModal.addEventListener('click', (e) => { if (e.target === checkInModal || e.target.hasAttribute('data-overlay')) checkInModal.classList.add('hidden'); });
+
+            const epicSelect = document.getElementById('checkInEpic');
+            const storySelect = document.getElementById('checkInStory');
+
+            async function loadStoriesForEpic(epicId) {
+                if (!storySelect) return;
+                storySelect.innerHTML = '';
+
+                if (!epicId) {
+                    const opt = document.createElement('option');
+                    opt.value = '';
+                    opt.textContent = '{{ _("Select an epic first") }}';
+                    storySelect.appendChild(opt);
+                    storySelect.disabled = true;
+                    return;
+                }
+
+                try {
+                    const res = await fetch(`/api/epics/${epicId}/stories`, { credentials: 'same-origin' });
+                    const data = await res.json();
+                    const placeholder = document.createElement('option');
+                    placeholder.value = '';
+                    placeholder.textContent = '{{ _("Select a story") }}';
+                    storySelect.appendChild(placeholder);
+                    if (data && data.stories) {
+                        data.stories.forEach(story => {
+                            const opt = document.createElement('option');
+                            opt.value = story.id;
+                            opt.textContent = story.name;
+                            storySelect.appendChild(opt);
+                        });
+                    }
+                    storySelect.disabled = false;
+                } catch (e) {
+                    console.error('Failed to load stories for epic:', e);
+                }
+            }
+
+            epicSelect?.addEventListener('change', () => loadStoriesForEpic(epicSelect.value));
+
+            const pickFields = document.getElementById('checkInPickFields');
+            const manualFields = document.getElementById('checkInManualFields');
+            const toggleManualBtn = document.getElementById('checkInToggleManual');
+            const newEpicNameInput = document.getElementById('checkInNewEpicName');
+            const newStoryNameInput = document.getElementById('checkInNewStoryName');
+            let manualMode = false;
+
+            function setManualMode(on) {
+                manualMode = on;
+                pickFields?.classList.toggle('hidden', on);
+                manualFields?.classList.toggle('hidden', !on);
+                if (storySelect) storySelect.required = !on;
+                if (newEpicNameInput) newEpicNameInput.required = on;
+                if (newStoryNameInput) newStoryNameInput.required = on;
+                if (toggleManualBtn) {
+                    toggleManualBtn.textContent = on
+                        ? {{ _("Pick from existing Epic/Story instead")|tojson }}
+                        : {{ _("Can't find your Epic/Story? Enter it manually")|tojson }};
+                }
+            }
+
+            toggleManualBtn?.addEventListener('click', () => setManualMode(!manualMode));
+        }
+
+        const checkOutModal = document.getElementById('checkOutModal');
+        document.addEventListener('click', (e) => {
+            const headerBtn = e.target.closest('#openCheckOut');
+            if (headerBtn && checkOutModal) {
+                e.preventDefault();
+                checkOutModal.classList.remove('hidden');
+            }
+        });
+        if (checkOutModal) {
+            checkOutModal.querySelector('[data-close]')?.addEventListener('click', () => checkOutModal.classList.add('hidden'));
+            checkOutModal.addEventListener('click', (e) => { if (e.target === checkOutModal || e.target.hasAttribute('data-overlay')) checkOutModal.classList.add('hidden'); });
+
+            const nextDateInput = document.getElementById('checkOutNextDate');
+            checkOutModal.querySelectorAll('.checkout-resolution').forEach(radio => {
+                radio.addEventListener('change', () => {
+                    if (nextDateInput) nextDateInput.disabled = (radio.value === 'done' && radio.checked);
+                });
+            });
+        }
+
+        const updateCheckinModal = document.getElementById('updateCheckinModal');
+        const updateCheckinTaskId = document.getElementById('updateCheckinTaskId');
+        const updateCheckinTaskName = document.getElementById('updateCheckinTaskName');
+        const updateCheckinDueDate = document.getElementById('updateCheckinDueDate');
+        document.addEventListener('click', (e) => {
+            const btn = e.target.closest('.update-trigger');
+            if (btn && updateCheckinModal) {
+                e.preventDefault();
+                if (updateCheckinTaskId) updateCheckinTaskId.value = btn.dataset.taskId;
+                if (updateCheckinTaskName) updateCheckinTaskName.textContent = btn.dataset.taskName || '';
+                if (updateCheckinDueDate) updateCheckinDueDate.value = btn.dataset.dueDate || '';
+                updateCheckinModal.classList.remove('hidden');
+            }
+        });
+        if (updateCheckinModal) {
+            updateCheckinModal.querySelector('[data-close]')?.addEventListener('click', () => updateCheckinModal.classList.add('hidden'));
+            updateCheckinModal.addEventListener('click', (e) => { if (e.target === updateCheckinModal || e.target.hasAttribute('data-overlay')) updateCheckinModal.classList.add('hidden'); });
+        }
+    });
 </script>
 
 {% if ai_enabled %}

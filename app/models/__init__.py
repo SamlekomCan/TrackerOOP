@@ -86,6 +86,8 @@ from .stock_movement import StockMovement
 from .stock_reservation import StockReservation
 from .supplier import Supplier
 from .supplier_stock_item import SupplierStockItem
+from .epic import Epic
+from .story import Story
 from .task import Task
 from .task_activity import TaskActivity
 from .task_checklist_item import TaskChecklistItem
@@ -97,6 +99,7 @@ from .time_entry_template import TimeEntryTemplate
 from .time_off import CompanyHoliday, LeaveType, TimeOffRequest, TimeOffRequestStatus
 from .timesheet_period import TimesheetPeriod, TimesheetPeriodStatus
 from .timesheet_policy import TimesheetPolicy
+from .trending_issue import TrendingIssue
 from .user import User
 from .user_client import UserClient
 from .user_favorite_project import UserFavoriteProject
@@ -245,8 +248,10 @@ __all__ = [
     "CustomFieldDefinition",
     "SalesmanEmailMapping",
     "Issue",
-    "DonationInteraction",
     "ClientNotification",
     "ClientNotificationPreferences",
     "NotificationType",
+    "Epic",
+    "Story",
+    "TrendingIssue",
 ]

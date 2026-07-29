@@ -19,10 +19,24 @@ from flask_login import current_user, login_required
 from sqlalchemy import text
 
 from app import csrf, db, limiter, track_event, track_page_view
-from app.models import Activity, Client, Project, Settings, TimeEntry, TimeEntryTemplate, User, WeeklyTimeGoal
+from app.models import (
+    Activity,
+    Client,
+    Epic,
+    Project,
+    Settings,
+    Story,
+    Task,
+    TimeEntry,
+    TimeEntryTemplate,
+    TrendingIssue,
+    User,
+    WeeklyTimeGoal,
+)
 from app.models.time_entry import local_now
 from app.utils.license_utils import is_license_activated
 from app.utils.posthog_segmentation import update_user_segments_if_needed
+from app.utils.timezone import now_in_app_timezone
 
 main_bp = Blueprint("main", __name__)
 
@@ -46,11 +60,32 @@ def dashboard():
     # Get user's active timer
     active_timer = current_user.active_timer
 
-    # Get recent entries for the user (using repository to avoid N+1)
-    from app.repositories import TimeEntryRepository
+    # Get the user's checked-in tasks for the Upcoming Task widget
+    from sqlalchemy.orm import joinedload
 
-    time_entry_repo = TimeEntryRepository()
-    recent_entries = time_entry_repo.get_by_user(user_id=current_user.id, limit=10, include_relations=True)
+    upcoming_checkin_tasks = (
+        Task.query.filter(
+            Task.source == "check_in",
+            Task.assigned_to == current_user.id,
+            Task.status.in_(["todo", "in_progress"]),
+        )
+        .options(joinedload(Task.story).joinedload(Story.epic))
+        .order_by(Task.due_date.asc().nulls_last())
+        .limit(10)
+        .all()
+    )
+
+    # Get active epics for the Check-In Epic -> Story dropdown
+    epics = (
+        Epic.query.filter_by(status="active")
+        .order_by(Epic.next_follow_up_date.asc().nulls_first(), Epic.deadline_date.asc().nulls_last())
+        .all()
+    )
+
+    # Get trending issues for the dashboard box (open ones first, most recent)
+    trending_issues = (
+        TrendingIssue.query.order_by(TrendingIssue.status.asc(), TrendingIssue.created_at.desc()).limit(5).all()
+    )
 
     # Get active projects and clients for timer dropdown (scoped for subcontractors)
     from app.utils.scope_filter import apply_client_scope_to_model, apply_project_scope_to_model
@@ -311,6 +346,11 @@ def dashboard():
         "usage_support_stats": usage_support_stats,
         "support_dashboard_prompt": support_dashboard_prompt,
         "is_supporter_instance": is_supporter,
+        "upcoming_checkin_tasks": upcoming_checkin_tasks,
+        "today_iso": now_in_app_timezone().date().isoformat(),
+        "today": now_in_app_timezone().date(),
+        "epics": epics,
+        "trending_issues": trending_issues,
     }
 
     return render_template("main/dashboard.html", **template_data)

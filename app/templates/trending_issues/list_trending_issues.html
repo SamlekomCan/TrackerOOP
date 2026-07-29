@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}{{ _('Trending Issues') }}{% endblock %}
+
+{% block content %}
+<div class="px-4 sm:px-6 lg:px-8">
+  <div class="max-w-6xl mx-auto">
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h2 class="text-2xl font-bold flex items-center gap-2">
+          <span class="w-9 h-9 rounded-lg bg-primary flex items-center justify-center text-white"><i class="fas fa-fire"></i></span>
+          {{ _('Trending Issues') }}
+        </h2>
+        <p class="text-text-muted-light dark:text-text-muted-dark">{{ _('Issues flagged by management: name, PIC, and detail') }}</p>
+      </div>
+      {% if current_user.is_admin or current_user.has_permission('manage_trending_issues') %}
+      <a href="{{ url_for('trending_issues.create_trending_issue') }}" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white hover:opacity-90">
+        <i class="fas fa-plus"></i> {{ _('Add Issue') }}
+      </a>
+      {% endif %}
+    </div>
+
+    <div class="bg-card-light dark:bg-card-dark rounded-xl shadow ring-1 ring-border-light/60 dark:ring-border-dark/60">
+      <div class="p-0 overflow-x-auto">
+        <table class="min-w-full divide-y divide-border-light dark:divide-border-dark" role="table" aria-label="{{ _('Trending Issues') }}">
+          <thead>
+            <tr class="text-left text-sm">
+              <th scope="col" class="px-4 py-3">{{ _('Nama Issue') }}</th>
+              <th scope="col" class="px-4 py-3 w-48">{{ _('PIC') }}</th>
+              <th scope="col" class="px-4 py-3 w-28">{{ _('Status') }}</th>
+              <th scope="col" class="px-4 py-3 w-40">{{ _('Actions') }}</th>
+            </tr>
+          </thead>
+          <tbody role="rowgroup">
+            {% for issue in issues %}
+            <tr role="row">
+              <td class="px-4 py-3">
+                <div class="font-medium">{{ issue.name }}</div>
+                {% if issue.detail %}<div class="text-xs text-text-muted-light dark:text-text-muted-dark">{{ issue.detail[:80] }}{% if issue.detail|length > 80 %}...{% endif %}</div>{% endif %}
+              </td>
+              <td class="px-4 py-3">{{ issue.pic.display_name if issue.pic else '—' }}</td>
+              <td class="px-4 py-3">
+                <span class="chip {{ 'chip-success' if issue.status == 'resolved' else 'chip-warning' }}">{{ issue.status|capitalize }}</span>
+              </td>
+              <td class="px-4 py-3">
+                <a href="{{ url_for('trending_issues.view_trending_issue', issue_id=issue.id) }}" class="text-primary hover:underline">{{ _('View') }}</a>
+                {% if current_user.is_admin or current_user.has_permission('manage_trending_issues') %}
+                &middot;
+                <a href="{{ url_for('trending_issues.edit_trending_issue', issue_id=issue.id) }}" class="text-primary hover:underline">{{ _('Edit') }}</a>
+                {% endif %}
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="4" class="px-4 py-6 text-center text-text-muted-light dark:text-text-muted-dark">{{ _('No trending issues yet.') }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
