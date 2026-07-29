@@ -86,6 +86,7 @@ from .stock_movement import StockMovement
 from .stock_reservation import StockReservation
 from .supplier import Supplier
 from .supplier_stock_item import SupplierStockItem
+from .department import Department
 from .epic import Epic
 from .story import Story
 from .task import Task
@@ -254,4 +255,5 @@ __all__ = [
     "Epic",
     "Story",
     "TrendingIssue",
+    "Department",
 ]

@@ -531,6 +531,11 @@
                                             <i class="fas fa-shield-alt w-4 mr-2"></i>{{ _('Roles & Permissions') }}
                                         </a>
                                     </li>
+                                    <li>
+                                        <a data-no-propagation="true" class="block px-2 py-1 rounded {% if ep.startswith('admin.') and 'department' in ep %}text-primary font-semibold bg-background-light dark:bg-background-dark{% else %}text-text-light dark:text-text-dark hover:bg-background-light dark:hover:bg-background-dark{% endif %}" href="{{ url_for('admin.list_departments') }}">
+                                            <i class="fas fa-sitemap w-4 mr-2"></i>{{ _('Departments') }}
+                                        </a>
+                                    </li>
                                     {% endif %}
                                 </ul>
                             </li>

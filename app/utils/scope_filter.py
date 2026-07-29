@@ -87,6 +87,74 @@ def user_can_access_project(user, project_id):
     return project_id in allowed
 
 
+def get_allowed_department_ids(user=None):
+    """Return allowed department IDs for user, or None for full access. Uses current_user if user is None."""
+    u = user or (current_user if current_user.is_authenticated else None)
+    if not u:
+        return []
+    return u.get_allowed_department_ids()
+
+
+def user_can_access_department(user, department_id):
+    """Return True if user may access this department (for direct ID checks / 403)."""
+    if not user:
+        return False
+    if user.is_admin:
+        return True
+    allowed = user.get_allowed_department_ids()
+    if allowed is None:
+        return True
+    return department_id in allowed
+
+
+def get_department_scoped_user_ids(user=None):
+    """Return user IDs within the current user's department scope, or None for full access.
+
+    Used to filter records that don't carry their own department_id but are
+    tied to a user (created_by, assigned_to, pic_id, ...) whose department
+    determines visibility.
+    """
+    from app import db
+    from app.models import User
+
+    u = user or (current_user if current_user.is_authenticated else None)
+    if not u:
+        return []
+    allowed_dept_ids = u.get_allowed_department_ids()
+    if allowed_dept_ids is None:
+        return None
+    if not allowed_dept_ids:
+        return []
+    rows = db.session.query(User.id).filter(User.department_id.in_(allowed_dept_ids)).all()
+    return [r[0] for r in rows]
+
+
+def user_can_access_via_department_scope(owner_user_id, user=None):
+    """Return True if `owner_user_id` (the user who owns/created a record) is within the
+    current user's department scope -- for direct-URL 403 checks on records filtered out
+    of list views by apply_department_scope_via_user_field."""
+    allowed_user_ids = get_department_scoped_user_ids(user)
+    if allowed_user_ids is None:
+        return True
+    if owner_user_id is None:
+        return False
+    return owner_user_id in allowed_user_ids
+
+
+def apply_department_scope_via_user_field(model_user_column, query, user=None):
+    """Filter `query` to rows whose `model_user_column` (a FK to users.id) belongs to a user
+    in the current user's department. No-op for admins (full access).
+
+    Example: apply_department_scope_via_user_field(Epic.created_by, Epic.query)
+    """
+    allowed_user_ids = get_department_scoped_user_ids(user)
+    if allowed_user_ids is None:
+        return query
+    if not allowed_user_ids:
+        return query.filter(model_user_column.in_([]))  # never match
+    return query.filter(model_user_column.in_(allowed_user_ids))
+
+
 def get_active_clients_for_user(user, *, status="active"):
     """Return clients visible to user (respects scope)."""
     from app.models import Client

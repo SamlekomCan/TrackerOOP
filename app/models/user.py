@@ -20,6 +20,8 @@ class User(UserMixin, db.Model):
     email = db.Column(db.String(200), nullable=True, index=True)
     full_name = db.Column(db.String(200), nullable=True)
     role = db.Column(db.String(20), default="user", nullable=False)  # 'user' or 'admin'
+    # Privacy/visibility boundary: scopes what this user can see across the app (null = unscoped for admins)
+    department_id = db.Column(db.Integer, db.ForeignKey("departments.id"), nullable=True, index=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     last_login = db.Column(db.DateTime, nullable=True)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
@@ -288,6 +290,13 @@ class User(UserMixin, db.Model):
         """Check if user is a super admin"""
         # Check if user has super_admin role
         return any(role.name == "super_admin" for role in self.roles)
+
+    @property
+    def is_manager(self):
+        """Check if user holds the manager role (legacy role field or new role system)"""
+        if self.role == "manager":
+            return True
+        return "manager" in self.get_role_names()
 
     @property
     def active_timer(self):
@@ -618,6 +627,18 @@ class User(UserMixin, db.Model):
             return []
 
         return []
+
+    def get_allowed_department_ids(self):
+        """Return list of department IDs this user may access, or None for full access.
+
+        Admins/super admins are unscoped (see everything). Everyone else is
+        restricted to their own assigned department; a user with no
+        department assigned sees nothing department-scoped until an admin
+        assigns one.
+        """
+        if self.is_admin:
+            return None
+        return [self.department_id] if self.department_id else []
 
     # Client portal helpers
     def get_client_portal_data(self):

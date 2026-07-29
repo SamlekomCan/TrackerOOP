@@ -48,7 +48,7 @@
                 <h2 class="text-lg font-semibold">{{ _('Upcoming Task') }}</h2>
                 <div class="flex gap-2">
                     <button type="button" id="openCheckIn" class="bg-green-600 text-white px-4 py-2 rounded-lg btn-press shadow-md transition-smooth">{{ _('Check-In') }}</button>
-                    {% if upcoming_checkin_tasks %}
+                    {% if own_checkin_tasks %}
                     <button type="button" id="openCheckOut" class="bg-amber-600 text-white px-4 py-2 rounded-lg btn-press shadow-md transition-smooth">{{ _('Check-Out') }}</button>
                     {% endif %}
                 </div>
@@ -58,6 +58,7 @@
                     <thead class="border-b-2 border-border-light dark:border-border-dark">
                         <tr>
                             <th class="p-4">{{ _('Task') }}</th>
+                            <th class="p-4">{{ _('Assigned to') }}</th>
                             <th class="p-4">{{ _('Epic') }} &rsaquo; {{ _('Story') }}</th>
                             <th class="p-4">{{ _('Due') }}</th>
                             <th class="p-4">{{ _('Actions') }}</th>
@@ -65,8 +66,18 @@
                     </thead>
                     <tbody>
                         {% for task in upcoming_checkin_tasks %}
+                        {% set can_act = current_user.is_admin or task.assigned_to == current_user.id or task.created_by == current_user.id %}
                         <tr class="border-b border-border-light dark:border-border-dark">
                             <td class="p-4 font-medium">{{ task.name }}</td>
+                            <td class="p-4">
+                                {% if task.assigned_to == current_user.id %}
+                                <span class="text-sm text-text-muted-light dark:text-text-muted-dark">{{ _('You') }}</span>
+                                {% elif task.assigned_user %}
+                                <span class="text-sm">{{ task.assigned_user.display_name }}</span>
+                                {% else %}
+                                <span class="text-text-muted-light dark:text-text-muted-dark">—</span>
+                                {% endif %}
+                            </td>
                             <td class="p-4">
                                 {% if task.story %}
                                 <span class="text-sm">{{ task.story.epic.name }} &rsaquo; {{ task.story.name }}</span>
@@ -84,6 +95,7 @@
                                 {% endif %}
                             </td>
                             <td class="p-4">
+                                {% if can_act %}
                                 <div class="flex items-center gap-3">
                                     <button type="button"
                                             class="text-sm text-primary hover:underline update-trigger"
@@ -100,11 +112,14 @@
                                         </button>
                                     </form>
                                 </div>
+                                {% else %}
+                                <span class="text-text-muted-light dark:text-text-muted-dark text-sm">{{ _('View only') }}</span>
+                                {% endif %}
                             </td>
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="4" class="p-4 text-center text-text-muted-light dark:text-text-muted-dark">{{ _('No upcoming tasks. Use Check-In to add one.') }}</td>
+                            <td colspan="5" class="p-4 text-center text-text-muted-light dark:text-text-muted-dark">{{ _('No upcoming tasks. Use Check-In to add one.') }}</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -744,7 +759,7 @@
                         <label for="checkOutTask" class="block text-sm font-medium text-gray-700 dark:text-gray-300">{{ _('Task') }}</label>
                         <select id="checkOutTask" name="task_id" required class="form-input">
                             <option value="">{{ _('Select a task') }}</option>
-                            {% for task in upcoming_checkin_tasks %}
+                            {% for task in own_checkin_tasks %}
                             <option value="{{ task.id }}">{{ task.name }}</option>
                             {% endfor %}
                         </select>

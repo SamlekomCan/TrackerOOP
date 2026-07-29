@@ -1,10 +1,11 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask import Blueprint, render_template, request, redirect, url_for, flash, abort
 from flask_babel import gettext as _
 from flask_login import login_required, current_user
 from app import db
 from app.models import TrendingIssue, User
 from app.utils.db import safe_commit
 from app.utils.permissions import admin_or_permission_required
+from app.utils.scope_filter import apply_department_scope_via_user_field, user_can_access_via_department_scope
 
 trending_issues_bp = Blueprint("trending_issues", __name__)
 
@@ -13,7 +14,8 @@ trending_issues_bp = Blueprint("trending_issues", __name__)
 @login_required
 def list_trending_issues():
     """List all trending issues, open ones surfaced first."""
-    issues = TrendingIssue.query.order_by(
+    issues_query = apply_department_scope_via_user_field(TrendingIssue.created_by, TrendingIssue.query)
+    issues = issues_query.order_by(
         TrendingIssue.status.asc(), TrendingIssue.created_at.desc()
     ).all()
     return render_template("trending_issues/list_trending_issues.html", issues=issues)
@@ -52,6 +54,8 @@ def create_trending_issue():
 def view_trending_issue(issue_id):
     """View a trending issue."""
     issue = TrendingIssue.query.get_or_404(issue_id)
+    if not user_can_access_via_department_scope(issue.created_by):
+        abort(403)
     return render_template("trending_issues/view_trending_issue.html", issue=issue)
 
 
@@ -61,6 +65,8 @@ def view_trending_issue(issue_id):
 def edit_trending_issue(issue_id):
     """Edit an existing trending issue (management only)."""
     issue = TrendingIssue.query.get_or_404(issue_id)
+    if not user_can_access_via_department_scope(issue.created_by):
+        abort(403)
     users = User.query.order_by(User.username).all()
 
     if request.method == "POST":
@@ -94,6 +100,8 @@ def edit_trending_issue(issue_id):
 def delete_trending_issue(issue_id):
     """Delete a trending issue (management only)."""
     issue = TrendingIssue.query.get_or_404(issue_id)
+    if not user_can_access_via_department_scope(issue.created_by):
+        abort(403)
     issue_name = issue.name
 
     db.session.delete(issue)

@@ -28,6 +28,7 @@ import app as app_module
 from app import db, limiter
 from app.config.analytics_defaults import get_analytics_config
 from app.models import (
+    Department,
     DonationInteraction,
     Invoice,
     Project,
@@ -844,25 +845,29 @@ def create_user():
         username = request.form.get("username", "").strip().lower()
         full_name = request.form.get("full_name", "").strip()
         role_name = request.form.get("role", "user")  # This will be a role name from the Role system
+        department_id = request.form.get("department_id", "").strip()
         default_password = request.form.get("default_password", "").strip()
         force_password_change = request.form.get("force_password_change") == "on"
 
         if not username:
             flash(_("Username is required"), "error")
             all_roles = Role.query.filter(Role.name.in_(VISIBLE_ROLE_NAMES)).order_by(Role.name).all()
-            return render_template("admin/user_form.html", user=None, all_roles=all_roles)
+            all_departments = Department.query.filter_by(is_active=True).order_by(Department.name).all()
+            return render_template("admin/user_form.html", user=None, all_roles=all_roles, all_departments=all_departments)
 
         # Check if user already exists
         if User.query.filter_by(username=username).first():
             flash(_("User already exists"), "error")
             all_roles = Role.query.filter(Role.name.in_(VISIBLE_ROLE_NAMES)).order_by(Role.name).all()
-            return render_template("admin/user_form.html", user=None, all_roles=all_roles)
+            all_departments = Department.query.filter_by(is_active=True).order_by(Department.name).all()
+            return render_template("admin/user_form.html", user=None, all_roles=all_roles, all_departments=all_departments)
 
         # Manager and PO accounts can only be created by admins
         if role_name in ADMIN_ONLY_ROLE_NAMES and not current_user.is_admin:
             flash(_("Only administrators can create users with the Manager or PO role"), "error")
             all_roles = Role.query.filter(Role.name.in_(VISIBLE_ROLE_NAMES)).order_by(Role.name).all()
-            return render_template("admin/user_form.html", user=None, all_roles=all_roles)
+            all_departments = Department.query.filter_by(is_active=True).order_by(Department.name).all()
+            return render_template("admin/user_form.html", user=None, all_roles=all_roles, all_departments=all_departments)
 
         # Get the Role object from the database
         role_obj = Role.query.filter_by(name=role_name).first()
@@ -872,10 +877,12 @@ def create_user():
             if not role_obj:
                 flash(_("Default 'user' role not found. Please run 'flask seed_permissions_cmd' first."), "error")
                 all_roles = Role.query.order_by(Role.name).all()
-                return render_template("admin/user_form.html", user=None, all_roles=all_roles)
+                all_departments = Department.query.filter_by(is_active=True).order_by(Department.name).all()
+                return render_template("admin/user_form.html", user=None, all_roles=all_roles, all_departments=all_departments)
 
         # Create user with legacy role field for backward compatibility
         user = User(username=username, role=role_name, full_name=full_name or None)
+        user.department_id = int(department_id) if department_id else None
         # Apply company default for daily working hours (overtime)
         try:
             settings = Settings.get_settings()
@@ -896,14 +903,16 @@ def create_user():
         if not safe_commit("admin_create_user", {"username": username}):
             flash(_("Could not create user due to a database error. Please check server logs."), "error")
             all_roles = Role.query.order_by(Role.name).all()
-            return render_template("admin/user_form.html", user=None, all_roles=all_roles)
+            all_departments = Department.query.filter_by(is_active=True).order_by(Department.name).all()
+            return render_template("admin/user_form.html", user=None, all_roles=all_roles, all_departments=all_departments)
 
         flash(_('User "%(username)s" created successfully', username=username), "success")
         return redirect(url_for("admin.list_users"))
 
     # GET request - show form with available roles
     all_roles = Role.query.filter(Role.name.in_(VISIBLE_ROLE_NAMES)).order_by(Role.name).all()
-    return render_template("admin/user_form.html", user=None, all_roles=all_roles)
+    all_departments = Department.query.filter_by(is_active=True).order_by(Department.name).all()
+    return render_template("admin/user_form.html", user=None, all_roles=all_roles, all_departments=all_departments)
 
 
 @admin_bp.route("/admin/users/<int:user_id>/edit", methods=["GET", "POST"])
@@ -916,12 +925,14 @@ def edit_user(user_id):
     user = User.query.get_or_404(user_id)
     clients = Client.query.filter_by(status="active").order_by(Client.name).all()
     all_roles = Role.query.order_by(Role.name).all()
+    all_departments = Department.query.filter_by(is_active=True).order_by(Department.name).all()
     assigned_client_ids = [c.id for c in user.assigned_clients.all()]
 
     if request.method == "POST":
         username = request.form.get("username", "").strip().lower()
         full_name = request.form.get("full_name", "").strip()
         role_name = request.form.get("role", "user")  # This will be a role name from the Role system
+        department_id = request.form.get("department_id", "").strip()
         is_active = request.form.get("is_active") == "on"
         client_portal_enabled = request.form.get("client_portal_enabled") == "on"
         portal_only = request.form.get("portal_only") == "on"
@@ -933,14 +944,14 @@ def edit_user(user_id):
                 "admin/user_form.html",
                 user=user,
                 clients=clients,
-                all_roles=all_roles,
+                all_roles=all_roles, all_departments=all_departments,
                 assigned_client_ids=assigned_client_ids,
             )
 
         # Manager and PO roles can only be assigned by admins
         if role_name in ADMIN_ONLY_ROLE_NAMES and not current_user.is_admin:
             flash(_("Only administrators can assign the Manager or PO role"), "error")
-            return render_template("admin/user_form.html", user=user, clients=clients, all_roles=all_roles)
+            return render_template("admin/user_form.html", user=user, clients=clients, all_roles=all_roles, all_departments=all_departments)
 
         # Check if username is already taken by another user
         existing_user = User.query.filter_by(username=username).first()
@@ -950,7 +961,7 @@ def edit_user(user_id):
                 "admin/user_form.html",
                 user=user,
                 clients=clients,
-                all_roles=all_roles,
+                all_roles=all_roles, all_departments=all_departments,
                 assigned_client_ids=assigned_client_ids,
             )
 
@@ -961,7 +972,7 @@ def edit_user(user_id):
                 "admin/user_form.html",
                 user=user,
                 clients=clients,
-                all_roles=all_roles,
+                all_roles=all_roles, all_departments=all_departments,
                 assigned_client_ids=assigned_client_ids,
             )
 
@@ -976,7 +987,7 @@ def edit_user(user_id):
                     "admin/user_form.html",
                     user=user,
                     clients=clients,
-                    all_roles=all_roles,
+                    all_roles=all_roles, all_departments=all_departments,
                     assigned_client_ids=assigned_client_ids,
                 )
 
@@ -993,7 +1004,7 @@ def edit_user(user_id):
                     "admin/user_form.html",
                     user=user,
                     clients=clients,
-                    all_roles=all_roles,
+                    all_roles=all_roles, all_departments=all_departments,
                     assigned_client_ids=assigned_client_ids,
                 )
 
@@ -1003,7 +1014,7 @@ def edit_user(user_id):
                     "admin/user_form.html",
                     user=user,
                     clients=clients,
-                    all_roles=all_roles,
+                    all_roles=all_roles, all_departments=all_departments,
                     assigned_client_ids=assigned_client_ids,
                 )
 
@@ -1018,6 +1029,7 @@ def edit_user(user_id):
         # Update user
         user.username = username
         user.full_name = full_name or None
+        user.department_id = int(department_id) if department_id else None
         # Update legacy role field for backward compatibility
         user.role = role_name
 
@@ -1059,7 +1071,7 @@ def edit_user(user_id):
                 "admin/user_form.html",
                 user=user,
                 clients=clients,
-                all_roles=all_roles,
+                all_roles=all_roles, all_departments=all_departments,
                 assigned_client_ids=assigned_client_ids,
             )
 
@@ -1070,7 +1082,7 @@ def edit_user(user_id):
         return redirect(url_for("admin.list_users"))
 
     return render_template(
-        "admin/user_form.html", user=user, clients=clients, all_roles=all_roles, assigned_client_ids=assigned_client_ids
+        "admin/user_form.html", user=user, clients=clients, all_roles=all_roles, all_departments=all_departments, assigned_client_ids=assigned_client_ids
     )
 
 
@@ -1163,6 +1175,108 @@ def delete_user(user_id):
 
     flash(_('User "%(username)s" deleted successfully', username=username), "success")
     return redirect(url_for("admin.list_users"))
+
+
+# ============================================================================
+# Departments (privacy/visibility boundary)
+# ============================================================================
+@admin_bp.route("/admin/departments")
+@login_required
+@admin_required
+def list_departments():
+    """List all departments with member counts"""
+    departments = Department.query.order_by(Department.name).all()
+    return render_template("admin/departments/list.html", departments=departments)
+
+
+@admin_bp.route("/admin/departments/create", methods=["GET", "POST"])
+@login_required
+@admin_required
+def create_department():
+    """Create a new department"""
+    if request.method == "POST":
+        name = request.form.get("name", "").strip()
+        code = request.form.get("code", "").strip()
+        description = request.form.get("description", "").strip()
+
+        if not name:
+            flash(_("Department name is required"), "error")
+            return render_template("admin/departments/form.html", department=None)
+
+        if Department.query.filter_by(name=name).first():
+            flash(_("A department with this name already exists"), "error")
+            return render_template("admin/departments/form.html", department=None)
+
+        department = Department(
+            name=name, code=code or None, description=description or None, created_by=current_user.id
+        )
+        db.session.add(department)
+        if not safe_commit("admin_create_department", {}):
+            flash(_("Could not create department due to a database error"), "error")
+            return render_template("admin/departments/form.html", department=None)
+
+        flash(_('Department "%(name)s" created successfully', name=department.name), "success")
+        return redirect(url_for("admin.list_departments"))
+
+    return render_template("admin/departments/form.html", department=None)
+
+
+@admin_bp.route("/admin/departments/<int:department_id>/edit", methods=["GET", "POST"])
+@login_required
+@admin_required
+def edit_department(department_id):
+    """Edit an existing department"""
+    department = Department.query.get_or_404(department_id)
+
+    if request.method == "POST":
+        name = request.form.get("name", "").strip()
+        code = request.form.get("code", "").strip()
+        description = request.form.get("description", "").strip()
+        is_active = request.form.get("is_active") == "on"
+
+        if not name:
+            flash(_("Department name is required"), "error")
+            return render_template("admin/departments/form.html", department=department)
+
+        existing = Department.query.filter_by(name=name).first()
+        if existing and existing.id != department.id:
+            flash(_("A department with this name already exists"), "error")
+            return render_template("admin/departments/form.html", department=department)
+
+        department.name = name
+        department.code = code.strip().upper() if code else None
+        department.description = description or None
+        department.is_active = is_active
+
+        if not safe_commit("admin_edit_department", {"department_id": department.id}):
+            flash(_("Could not update department due to a database error"), "error")
+            return render_template("admin/departments/form.html", department=department)
+
+        flash(_('Department "%(name)s" updated successfully', name=department.name), "success")
+        return redirect(url_for("admin.list_departments"))
+
+    return render_template("admin/departments/form.html", department=department)
+
+
+@admin_bp.route("/admin/departments/<int:department_id>/delete", methods=["POST"])
+@login_required
+@admin_required
+def delete_department(department_id):
+    """Delete a department (blocked while users are still assigned to it)"""
+    department = Department.query.get_or_404(department_id)
+
+    if department.members.count() > 0:
+        flash(_("Cannot delete a department with assigned users. Reassign them first."), "error")
+        return redirect(url_for("admin.list_departments"))
+
+    name = department.name
+    db.session.delete(department)
+    if not safe_commit("admin_delete_department", {"department_id": department_id}):
+        flash(_("Could not delete department due to a database error"), "error")
+        return redirect(url_for("admin.list_departments"))
+
+    flash(_('Department "%(name)s" deleted', name=name), "success")
+    return redirect(url_for("admin.list_departments"))
 
 
 @admin_bp.route("/admin/telemetry")

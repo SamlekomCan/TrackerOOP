@@ -1,10 +1,11 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask import Blueprint, render_template, request, redirect, url_for, flash, abort
 from flask_babel import gettext as _
 from flask_login import login_required, current_user
 from datetime import datetime
 from app import db
 from app.models import Epic, Story
 from app.utils.db import safe_commit
+from app.utils.scope_filter import apply_department_scope_via_user_field, user_can_access_via_department_scope
 from app.utils.timezone import now_in_app_timezone
 from app.routes.admin import admin_required
 
@@ -26,7 +27,8 @@ def _parse_deadline_date(raw):
 @admin_required
 def list_epics():
     """List Deadline: all Epics, not-yet-followed-up and soonest-due surfaced first"""
-    epics = Epic.query.order_by(
+    epics_query = apply_department_scope_via_user_field(Epic.created_by, Epic.query)
+    epics = epics_query.order_by(
         Epic.next_follow_up_date.asc().nulls_first(),
         Epic.deadline_date.asc().nulls_last(),
     ).all()
@@ -65,6 +67,8 @@ def create_epic():
 def view_epic(epic_id):
     """View an Epic and its Stories"""
     epic = Epic.query.get_or_404(epic_id)
+    if not user_can_access_via_department_scope(epic.created_by):
+        abort(403)
     stories = Story.query.filter_by(epic_id=epic.id).order_by(Story.status.asc(), Story.name.asc()).all()
     return render_template("deadlines/view_epic.html", epic=epic, stories=stories)
 
@@ -75,6 +79,8 @@ def view_epic(epic_id):
 def edit_epic(epic_id):
     """Edit an existing Epic"""
     epic = Epic.query.get_or_404(epic_id)
+    if not user_can_access_via_department_scope(epic.created_by):
+        abort(403)
 
     if request.method == "POST":
         name = request.form.get("name", "").strip()
