@@ -55,8 +55,6 @@ const HEAD_SCRIPTS = ['pwa-enhancements.js'];
 const CORE_GROUPS = {
   // Ungated: loaded for anonymous and authenticated users alike.
   'core-a1': ['date-picker-init.js', 'enhanced-search.js', 'form-validation.js', 'toast-notifications.js'],
-  // Gated on `current_user.is_authenticated and support_ui_json`.
-  'core-support': ['support-ui.js'],
   // Ungated.
   'core-a2': ['enhanced-tables.js', 'interactions.js', 'offline-sync.js', 'mentions.js'],
   // Gated on `current_user.is_authenticated` — the floating timer bar and idle

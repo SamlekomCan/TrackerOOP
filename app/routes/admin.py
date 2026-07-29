@@ -1910,39 +1910,6 @@ def admin_peppol_setup_wizard_send_test():
         return jsonify({"ok": False, "error": f"Failed to send invoice via Peppol: {e}"}), 500
 
 
-@admin_bp.route("/admin/settings/verify-donate-hide-code", methods=["POST"])
-@login_required
-@admin_or_permission_required("manage_settings")
-def admin_verify_donate_hide_code():
-    """Verify code (Ed25519 or HMAC) and set system-wide donate_ui_hidden=True."""
-    from app.utils.donate_hide_code import system_id_log_prefix, verify_supporter_code
-
-    settings_obj = Settings.get_settings()
-    if getattr(settings_obj, "donate_ui_hidden", False):
-        return jsonify({"success": True})
-
-    data = request.get_json() or {}
-    code = (data.get("code") or "").strip()
-    system_id = Settings.get_system_instance_id()
-    sid_prefix = system_id_log_prefix(system_id)
-    valid, reason = verify_supporter_code(
-        code,
-        system_id,
-        public_key_pem=current_app.config.get("DONATE_HIDE_PUBLIC_KEY_PEM") or "",
-        secret=current_app.config.get("DONATE_HIDE_UNLOCK_SECRET") or "",
-    )
-    if not valid:
-        current_app.logger.warning("License verify failed: %s (system_id_prefix=%s)", reason, sid_prefix)
-        return jsonify({"error": _("Invalid code.")}), 400
-
-    settings_obj.donate_ui_hidden = True
-    if safe_commit(db.session):
-        current_app.logger.info("License activated (system_id_prefix=%s)", sid_prefix)
-        return jsonify({"success": True})
-    current_app.logger.warning("License verify failed: save_error (system_id_prefix=%s)", sid_prefix)
-    return jsonify({"error": _("Error saving settings")}), 500
-
-
 @admin_bp.route("/admin/pdf-layout", methods=["GET", "POST"])
 @limiter.limit("30 per minute", methods=["POST"])  # editor saves
 @login_required

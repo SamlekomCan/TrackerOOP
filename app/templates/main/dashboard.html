@@ -310,7 +310,7 @@
 </div>
 
 <!-- Value Dashboard: productivity insights (filled via /api/stats/value-dashboard) -->
-<div id="valueDashboardRoot" class="mb-6 bg-card-light dark:bg-card-dark border border-border-light dark:border-border-dark rounded-xl shadow-sm p-6 dashboard-widget" data-support-msg="{{ _('If this saved you even 1 hour, consider supporting ❤️') }}" data-empty-msg="{{ _('Start tracking to see your productivity insights here.') }}" data-loading-msg="{{ _('Loading insights…') }}">
+<div id="valueDashboardRoot" class="mb-6 bg-card-light dark:bg-card-dark border border-border-light dark:border-border-dark rounded-xl shadow-sm p-6 dashboard-widget" data-empty-msg="{{ _('Start tracking to see your productivity insights here.') }}" data-loading-msg="{{ _('Loading insights…') }}">
     <div class="flex items-center gap-3 mb-4">
         <div class="bg-amber-500/10 dark:bg-amber-400/10 p-3 rounded-lg">
             <i class="fas fa-chart-line text-amber-600 dark:text-amber-400 text-xl" aria-hidden="true"></i>
@@ -359,7 +359,6 @@
             <p class="text-sm font-medium text-emerald-900 dark:text-emerald-100">{{ _('Estimated value tracked') }} (<span id="valueDashboardCurrency"></span>)</p>
             <p class="text-xl font-bold text-emerald-800 dark:text-emerald-200" id="valueDashboardEstimatedAmount"></p>
         </div>
-        <p id="valueDashboardSupport" class="text-sm text-text-muted-light dark:text-text-muted-dark text-center sm:text-left"></p>
     </div>
 </div>
 
@@ -888,39 +887,6 @@
         </div>
     </div>
 
-    {% if current_user.ui_show_donate and not is_license_activated %}
-    <div class="bg-card-light dark:bg-card-dark border border-border-light dark:border-border-dark p-5 rounded-xl shadow-sm dashboard-widget">
-        <div class="flex items-center gap-2 mb-3">
-            <div class="bg-amber-500/10 dark:bg-amber-400/10 p-2 rounded-lg">
-                <i class="fas fa-heart text-amber-600 dark:text-amber-400" aria-hidden="true"></i>
-            </div>
-            <h2 class="text-base font-semibold text-text-light dark:text-text-dark">{{ _('Enjoying TimeTracker?') }}</h2>
-        </div>
-        <p class="text-sm text-text-muted-light dark:text-text-muted-dark mb-2">
-            {{ _('You have tracked %(hours)s hours', hours=('%.1f'|format((usage_support_stats.total_hours or 0)|float))) }}
-            · {{ _('You have created %(count)s entries', count=usage_support_stats.time_entries_count or 0) }}
-            {% if (usage_support_stats.reports_generated_count or 0) > 0 %}
-            · {{ _('Reports generated: %(n)s', n=usage_support_stats.reports_generated_count) }}
-            {% endif %}
-        </p>
-        {% if is_supporter_instance %}
-        <p class="text-sm text-text-muted-light dark:text-text-muted-dark mb-4">{{ _('Thank you for supporting development. Sharing TimeTracker still helps a lot.') }}</p>
-        <div class="flex flex-wrap gap-2">
-            <button type="button" class="btn btn-secondary js-open-support-modal">{{ _('Share & support') }}</button>
-            <a href="{{ url_for('user.license') }}" class="btn btn-secondary">{{ _('License') }}</a>
-        </div>
-        {% else %}
-        <p class="text-sm text-text-muted-light dark:text-text-muted-dark mb-4">{{ _('If this saves you time, consider supporting development — everything stays free and open.') }}</p>
-        <div class="flex flex-wrap gap-2">
-            <button type="button" class="btn btn-primary js-open-support-modal"><i class="fas fa-heart mr-1.5" aria-hidden="true"></i>{{ _('Donate') }}</button>
-            <a href="{{ support_purchase_url }}" target="_blank" rel="noopener noreferrer" class="btn btn-secondary">{{ _('Buy License (€25)') }} <i class="fas fa-external-link-alt text-xs" aria-hidden="true"></i></a>
-        </div>
-        {% endif %}
-    </div>
-    {% endif %}
-    {% if support_dashboard_prompt %}
-    <script nonce="{{ csp_nonce() }}">window.__TT_DASHBOARD_SUPPORT_PROMPT = {{ support_dashboard_prompt|tojson }};</script>
-    {% endif %}
 </div>
     <!-- Delete Entry Confirmation Dialogs -->
     {% for entry in recent_entries %}
@@ -1151,7 +1117,7 @@
                     <div class="space-y-2">
                         <label class="flex items-center gap-2">
                             <input type="radio" name="resolution" value="followup" checked class="checkout-resolution">
-                            {{ _('Set new follow-up date') }}
+                            {{ _('Set new follow-up date (closes this task; tracked on the Deadline list)') }}
                         </label>
                         <input type="date" id="checkOutNextDate" name="next_due_date" class="form-input">
                         <label class="flex items-center gap-2">
@@ -1180,6 +1146,9 @@
                 <input type="hidden" id="updateCheckinTaskId" name="task_id" value="">
                 <div class="space-y-4">
                     <div class="font-medium" id="updateCheckinTaskName"></div>
+                    <p class="text-xs text-text-muted-light dark:text-text-muted-dark">
+                        {{ _('This closes the task and removes it from Upcoming Task. The next follow-up date stays visible in the Deadline list.') }}
+                    </p>
                     <div>
                         <label for="updateCheckinNote" class="block text-sm font-medium text-gray-700 dark:text-gray-300">{{ _('Follow-up note') }}</label>
                         <textarea id="updateCheckinNote" name="note" required rows="3" class="form-input" placeholder="{{ _('What is the latest progress?') }}"></textarea>

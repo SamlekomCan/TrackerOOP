@@ -671,10 +671,6 @@
                 estWrap.classList.add('hidden');
             }
 
-            const sup = document.getElementById('valueDashboardSupport');
-            if (sup) {
-                sup.textContent = root.getAttribute('data-support-msg') || '';
-            }
         } catch (e) {
             console.error('Value dashboard load error', e);
             if (loadingEl) {
