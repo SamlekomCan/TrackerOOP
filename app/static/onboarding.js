@@ -16,6 +16,8 @@ class OnboardingManager {
      * Initialize onboarding
      */
     init(steps) {
+        return; // TOUR TEMPORARILY DISABLED — remove this line to re-enable
+
         if (this.isCompleted()) {
             return;
         }
