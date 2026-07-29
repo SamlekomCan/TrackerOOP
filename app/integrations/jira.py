@@ -42,26 +42,6 @@ class JiraConnector(BaseConnector):
         api_version = "2" if self.integration.config.get("auth_method") == "pat" else "3"
         return f"{base_url}/rest/api/{api_version}"
 
-    @staticmethod
-    def _extract_description_text(description) -> Optional[str]:
-        """Extract plain text from a Jira description field.
-
-        API v2 (Server/Data Center) returns a plain string; API v3 (Cloud)
-        returns an Atlassian Document Format (ADF) dict.
-        """
-        if not description:
-            return None
-        if isinstance(description, str):
-            return description
-        if isinstance(description, dict):
-            try:
-                content = description.get("content", [])
-                if content and content[0].get("content"):
-                    return content[0]["content"][0].get("text", "")
-            except (IndexError, AttributeError, KeyError):
-                return None
-        return None
-
     def get_authorization_url(self, redirect_uri: str, state: str = None) -> str:
         """Get Jira OAuth authorization URL."""
         if self.integration.config.get("auth_method") == "pat":
@@ -195,9 +175,18 @@ class JiraConnector(BaseConnector):
             return {"success": False, "message": f"Connection error: {str(e)}"}
 
     def _extract_description_text(self, issue_fields: Dict[str, Any]) -> Optional[str]:
-        """Extract plain text from Jira description (ADF content structure)."""
+        """Extract plain text from a Jira description field.
+
+        API v2 (Server/Data Center, used by PAT auth) returns a plain string;
+        API v3 (Cloud, used by OAuth) returns an Atlassian Document Format
+        (ADF) dict.
+        """
         desc = issue_fields.get("description")
-        if not desc or not isinstance(desc, dict):
+        if not desc:
+            return None
+        if isinstance(desc, str):
+            return desc
+        if not isinstance(desc, dict):
             return None
         try:
             content = desc.get("content") or []

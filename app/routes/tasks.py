@@ -954,6 +954,8 @@ def check_in():
 @login_required
 def check_out():
     """Report a follow-up on a previously checked-in task from the dashboard."""
+    from app.models import Comment
+
     task_id = request.form.get("task_id", type=int)
     note = request.form.get("note", "").strip()
     resolution = request.form.get("resolution", "").strip()
@@ -1009,7 +1011,7 @@ def check_out():
         flash(_("Task closed — no further follow-up needed"), "success")
     else:
         task.due_date = next_due_date
-        task.updated_at = now_in_app_timezone()
+        task.cancel_task()
         db.session.add(
             TaskActivity(
                 task_id=task.id,
@@ -1026,7 +1028,7 @@ def check_out():
         if not safe_commit("check_out_followup", {"task_id": task.id}):
             flash(_("Could not update task due to a database error"), "error")
             return redirect(url_for("main.dashboard"))
-        flash(_("Follow-up date updated"), "success")
+        flash(_("Follow-up recorded — task closed, next follow-up tracked on the Deadline list"), "success")
 
     _invalidate_dashboard_cache(current_user.id)
     return redirect(url_for("main.dashboard"))
