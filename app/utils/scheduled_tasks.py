@@ -7,6 +7,7 @@ from flask import current_app
 
 from app import db
 from app.models import (
+    Activity,
     BudgetAlert,
     Integration,
     Invoice,
@@ -14,6 +15,7 @@ from app.models import (
     Quote,
     RecurringInvoice,
     ReportEmailSchedule,
+    Task,
     TimeEntry,
     User,
 )
@@ -27,6 +29,7 @@ from app.utils.email import (
     send_remind_to_log_email,
     send_weekly_summary,
 )
+from app.utils.timezone import now_in_app_timezone
 
 logger = logging.getLogger(__name__)
 
@@ -84,6 +87,54 @@ def check_overdue_invoices():
 
         except Exception as e:
             logger.error(f"Error checking overdue invoices: {e}")
+            return 0
+
+
+def clear_stale_checkin_tasks():
+    """Clear any Check-In tasks still sitting in a user's Upcoming Task list at end of day.
+
+    This task should be run daily at 17:00. A check-in task that was never
+    checked out today has its follow-up context (name/description/due date)
+    carried onto the linked Epic's follow-up fields -- shown as "Tindak
+    Lanjut" in the dashboard's Deadline widget -- before the task itself is
+    deleted, so the Upcoming Task list clears without losing the follow-up
+    trail.
+    """
+    with current_app.app_context():
+        try:
+            logger.info("Clearing stale check-in tasks from Upcoming Task lists...")
+
+            stale_tasks = Task.query.filter(
+                Task.source == "check_in",
+                Task.status.in_(["todo", "in_progress"]),
+            ).all()
+
+            cleared = 0
+            for task in stale_tasks:
+                if task.story and task.story.epic:
+                    epic = task.story.epic
+                    epic.follow_up_notes = task.description or task.name
+                    epic.next_follow_up_date = task.due_date
+                    epic.last_follow_up_at = now_in_app_timezone()
+
+                Activity.log(
+                    user_id=task.assigned_to or task.created_by,
+                    action="deleted",
+                    entity_type="task",
+                    entity_id=task.id,
+                    entity_name=task.name,
+                    description=f'Auto-cleared check-in task "{task.name}" from Upcoming Task at end of day',
+                )
+                db.session.delete(task)
+                cleared += 1
+
+            db.session.commit()
+            logger.info(f"Cleared {cleared} stale check-in tasks")
+            return cleared
+
+        except Exception as e:
+            logger.error(f"Error clearing stale check-in tasks: {e}")
+            db.session.rollback()
             return 0
 
 
@@ -417,6 +468,18 @@ def register_scheduled_tasks(scheduler, app=None):
             replace_existing=True,
         )
         logger.info("Registered overdue invoices check task")
+
+        # Clear stale check-in tasks from Upcoming Task lists daily at 5 PM
+        scheduler.add_job(
+            func=clear_stale_checkin_tasks,
+            trigger="cron",
+            hour=17,
+            minute=0,
+            id="clear_stale_checkin_tasks",
+            name="Clear stale check-in tasks at end of day",
+            replace_existing=True,
+        )
+        logger.info("Registered stale check-in tasks clearing job")
 
         # Send weekly summaries every Monday at 8 AM
         scheduler.add_job(
