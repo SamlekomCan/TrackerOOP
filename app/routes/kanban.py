@@ -42,6 +42,13 @@ def board():
     has_view_all_tasks = current_user.is_admin or current_user.has_permission("view_all_tasks")
     if not has_view_all_tasks:
         query = query.filter(db.or_(Task.assigned_to == current_user.id, Task.created_by == current_user.id))
+    elif not current_user.is_admin:
+        # "View all" via permission (e.g. manager role) is bounded to the user's own department
+        from app.utils.scope_filter import get_department_scoped_user_ids
+
+        dept_scoped_ids = get_department_scoped_user_ids(current_user)
+        if dept_scoped_ids is not None:
+            query = query.filter(db.or_(Task.assigned_to.in_(dept_scoped_ids), Task.created_by.in_(dept_scoped_ids)))
     if project_ids:
         query = query.filter(Task.project_id.in_(project_ids))
     if user_ids:
@@ -73,6 +80,12 @@ def board():
     projects = get_active_projects_for_user(current_user, status="active")
     # Provide users for filter dropdown (active users only)
     users = User.query.filter_by(is_active=True).order_by(User.full_name, User.username).all()
+    if not current_user.is_admin:
+        from app.utils.scope_filter import get_department_scoped_user_ids
+
+        dept_user_ids = get_department_scoped_user_ids(current_user)
+        if dept_user_ids is not None:
+            users = [u for u in users if u.id in dept_user_ids]
 
     # No-cache
     response = render_template(

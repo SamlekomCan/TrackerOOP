@@ -252,6 +252,7 @@ def get_active_clients_for_user(user, *, status="active"):
     scope = apply_client_scope_to_model(Client, user)
     if scope is not None:
         query = query.filter(scope)
+    query = apply_department_scope_to_model(Client.department_id, query, user)
     return query.all()
 
 
@@ -263,6 +264,9 @@ def get_active_projects_for_user(user, *, status="active"):
     scope = apply_project_scope_to_model(Project, user)
     if scope is not None:
         query = query.filter(scope)
+    dept_project_ids = get_department_scoped_project_ids(user)
+    if dept_project_ids is not None:
+        query = query.filter(Project.id.in_(dept_project_ids))
     return query.all()
 
 
