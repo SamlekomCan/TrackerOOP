@@ -162,10 +162,21 @@ def register_context_processors(app):
             getattr(current_user, "is_authenticated", False) and getattr(current_user, "is_admin", False)
         )
 
+        # Cheap lookup list (handful of rows) for department pickers on Client/User forms.
+        all_departments = []
+        if is_admin_user:
+            try:
+                from app.models import Department
+
+                all_departments = Department.query.filter_by(is_active=True).order_by(Department.name).all()
+            except Exception:
+                all_departments = []
+
         return {
             "app_name": "Time Tracker",
             "app_version": version_value,
             "is_admin_user": is_admin_user,
+            "all_departments": all_departments,
             "timezone": timezone_name,
             "timezone_offset": get_timezone_offset_for_timezone(timezone_name),
             "user_timezone": user_timezone,

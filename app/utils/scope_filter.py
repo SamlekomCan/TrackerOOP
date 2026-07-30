@@ -129,6 +129,95 @@ def get_department_scoped_user_ids(user=None):
     return [r[0] for r in rows]
 
 
+def combine_id_scopes(*id_scopes):
+    """Combine multiple allowed-id-list-or-None scopes with AND semantics.
+
+    Each argument is either None (unrestricted for that dimension) or a list of
+    allowed IDs. Returns None only if every scope is unrestricted; otherwise
+    returns the intersection of all restrictive scopes (so a user must pass
+    every applicable scope, e.g. subcontractor client assignment AND
+    department, to see a record).
+    """
+    restrictive = [s for s in id_scopes if s is not None]
+    if not restrictive:
+        return None
+    result = set(restrictive[0])
+    for s in restrictive[1:]:
+        result &= set(s)
+    return list(result)
+
+
+def get_department_scoped_client_ids(user=None):
+    """Return client IDs within the current user's department scope, or None for full access."""
+    from app.models import Client
+
+    allowed_dept_ids = get_allowed_department_ids(user)
+    if allowed_dept_ids is None:
+        return None
+    if not allowed_dept_ids:
+        return []
+    rows = Client.query.with_entities(Client.id).filter(Client.department_id.in_(allowed_dept_ids)).all()
+    return [r[0] for r in rows]
+
+
+def get_department_scoped_project_ids(user=None):
+    """Return project IDs (via their Client's department) within the current user's
+    department scope, or None for full access."""
+    from app.models import Client, Project
+
+    allowed_dept_ids = get_allowed_department_ids(user)
+    if allowed_dept_ids is None:
+        return None
+    if not allowed_dept_ids:
+        return []
+    rows = (
+        Project.query.with_entities(Project.id)
+        .join(Client, Project.client_id == Client.id)
+        .filter(Client.department_id.in_(allowed_dept_ids))
+        .all()
+    )
+    return [r[0] for r in rows]
+
+
+def get_report_scoped_user_ids(user=None):
+    """Return user IDs whose time-entry-backed reports the current user may view, or None
+    for full access. Bounds the "view_all_time_entries" permission (e.g. manager role) to
+    the user's own department instead of the whole company; admins stay unrestricted."""
+    u = user or (current_user if current_user.is_authenticated else None)
+    if not u:
+        return []
+    if u.is_admin:
+        return None
+    if u.has_permission("view_all_time_entries"):
+        return get_department_scoped_user_ids(u)
+    return [u.id]
+
+
+def apply_department_scope_to_model(model_department_column, query, user=None):
+    """Filter `query` to rows whose own `model_department_column` (a FK to departments.id,
+    e.g. Client.department_id) is within the current user's department scope.
+    No-op for admins (full access). A row with department_id=None is excluded for
+    scoped (non-admin) users -- it hasn't been assigned to a department yet.
+    """
+    allowed_dept_ids = get_allowed_department_ids(user)
+    if allowed_dept_ids is None:
+        return query
+    if not allowed_dept_ids:
+        return query.filter(model_department_column.in_([]))  # never match
+    return query.filter(model_department_column.in_(allowed_dept_ids))
+
+
+def user_can_access_department_owned_record(department_id, user=None):
+    """Return True if a record whose own department_id is `department_id` is within
+    the current user's department scope (for direct-URL 403 checks)."""
+    allowed_dept_ids = get_allowed_department_ids(user)
+    if allowed_dept_ids is None:
+        return True
+    if department_id is None:
+        return False
+    return department_id in allowed_dept_ids
+
+
 def user_can_access_via_department_scope(owner_user_id, user=None):
     """Return True if `owner_user_id` (the user who owns/created a record) is within the
     current user's department scope -- for direct-URL 403 checks on records filtered out

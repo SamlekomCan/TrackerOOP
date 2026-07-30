@@ -25,6 +25,18 @@
                         <input type="number" step="0.01" min="0" id="default_hourly_rate" name="default_hourly_rate" value="{{ request.form.get('default_hourly_rate','') }}" placeholder="{{ _('e.g. 75.00') }}" class="form-input">
                         <p class="text-xs text-text-muted-light dark:text-text-muted-dark mt-1">{{ _('This rate will be automatically filled when creating projects for this client') }}</p>
                     </div>
+                    {% if all_departments %}
+                    <div>
+                        <label for="department_id" class="form-label">{{ _('Department') }}</label>
+                        <select id="department_id" name="department_id" class="form-input">
+                            <option value="">{{ _('Use my department') }}</option>
+                            {% for department in all_departments %}
+                            <option value="{{ department.id }}" {% if request.form.get('department_id')|int(0) == department.id %}selected{% endif %}>{{ department.name }}</option>
+                            {% endfor %}
+                        </select>
+                        <p class="text-xs text-text-muted-light dark:text-text-muted-dark mt-1">{{ _('Who can see this client and its projects/invoices/time entries.') }}</p>
+                    </div>
+                    {% endif %}
                 </div>
 
                 <div>

@@ -352,15 +352,21 @@ class ReportingService:
         }
 
     def get_comparison_data(
-        self, period: str = "month", user_id: Optional[int] = None, can_view_all: bool = False
+        self,
+        period: str = "month",
+        user_id: Optional[int] = None,
+        can_view_all: bool = False,
+        scoped_user_ids: Optional[list] = None,
     ) -> Dict[str, Any]:
         """
         Get period-over-period comparison (current vs previous period hours).
 
         Args:
             period: "month" or "year"
-            user_id: Current user ID (used when can_view_all is False)
-            can_view_all: If True, include all users' time
+            user_id: Current user ID (used when can_view_all is False and scoped_user_ids is None)
+            can_view_all: If True, include all users' time (ignored when scoped_user_ids is given)
+            scoped_user_ids: If given, restrict to these user IDs (department-bounded "view all");
+                takes precedence over can_view_all/user_id.
 
         Returns:
             dict with current hours, previous hours, and change percent
@@ -380,7 +386,9 @@ class ReportingService:
             TimeEntry.start_time >= this_period_start,
             TimeEntry.start_time <= now,
         )
-        if not can_view_all and user_id is not None:
+        if scoped_user_ids is not None:
+            current_query = current_query.filter(TimeEntry.user_id.in_(scoped_user_ids))
+        elif not can_view_all and user_id is not None:
             current_query = current_query.filter(TimeEntry.user_id == user_id)
         current_seconds = current_query.scalar() or 0
 
@@ -389,7 +397,9 @@ class ReportingService:
             TimeEntry.start_time >= last_period_start,
             TimeEntry.start_time <= last_period_end,
         )
-        if not can_view_all and user_id is not None:
+        if scoped_user_ids is not None:
+            previous_query = previous_query.filter(TimeEntry.user_id.in_(scoped_user_ids))
+        elif not can_view_all and user_id is not None:
             previous_query = previous_query.filter(TimeEntry.user_id == user_id)
         previous_seconds = previous_query.scalar() or 0
 
@@ -411,18 +421,23 @@ class ReportingService:
         user_id_filter: Optional[int] = None,
         current_user_id: int = None,
         can_view_all: bool = False,
+        scoped_user_ids: Optional[list] = None,
     ) -> Dict[str, Any]:
         """
         Get aggregated project report data (entries, projects_data, summary).
 
         Caller must enforce permission: if not can_view_all and user_id_filter != current_user_id, do not call.
+        scoped_user_ids (if given) additionally bounds "view all" to a specific set of user
+        IDs (e.g. department members) and takes precedence over the can_view_all boolean.
         """
         query = TimeEntry.query.filter(
             TimeEntry.end_time.isnot(None),
             TimeEntry.start_time >= start_dt,
             TimeEntry.start_time <= end_dt,
         )
-        if not can_view_all and current_user_id is not None:
+        if scoped_user_ids is not None:
+            query = query.filter(TimeEntry.user_id.in_(scoped_user_ids))
+        elif not can_view_all and current_user_id is not None:
             query = query.filter(TimeEntry.user_id == current_user_id)
         if project_id:
             query = query.filter(TimeEntry.project_id == project_id)
@@ -524,9 +539,13 @@ class ReportingService:
         client_id: Optional[int] = None,
         current_user_id: Optional[int] = None,
         can_view_all: bool = False,
+        scoped_user_ids: Optional[list] = None,
     ) -> Dict[str, Any]:
         """
         Get unpaid hours report data: billable entries not in fully-paid invoices, grouped by client.
+
+        scoped_user_ids (if given) additionally bounds "view all" to a specific set of user
+        IDs (e.g. department members) and takes precedence over the can_view_all boolean.
 
         Returns:
             dict with client_data (list of client aggregates) and summary.
@@ -544,7 +563,9 @@ class ReportingService:
             TimeEntry.start_time >= start_dt,
             TimeEntry.start_time <= end_dt,
         )
-        if not can_view_all and current_user_id is not None:
+        if scoped_user_ids is not None:
+            query = query.filter(TimeEntry.user_id.in_(scoped_user_ids))
+        elif not can_view_all and current_user_id is not None:
             query = query.filter(TimeEntry.user_id == current_user_id)
         if client_id:
             query = query.filter(TimeEntry.client_id == client_id)
