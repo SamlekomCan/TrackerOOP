@@ -63,31 +63,45 @@ def dashboard():
     time_entry_repo = TimeEntryRepository()
     recent_entries = time_entry_repo.get_by_user(user_id=current_user.id, limit=10, include_relations=True)
 
-    # Get the user's checked-in tasks for the Upcoming Task widget
+    # Get the user's checked-in tasks for the Upcoming Task widget.
+    # Managers see their whole department's Member tasks; everyone else sees only their own.
     from sqlalchemy.orm import joinedload
 
+    from app.utils.scope_filter import apply_department_scope_via_user_field
+
+    upcoming_tasks_base = Task.query.filter(Task.source == "check_in", Task.status.in_(["todo", "in_progress"]))
+    if current_user.is_manager and not current_user.is_admin:
+        upcoming_tasks_query = apply_department_scope_via_user_field(Task.assigned_to, upcoming_tasks_base)
+    else:
+        upcoming_tasks_query = upcoming_tasks_base.filter(Task.assigned_to == current_user.id)
     upcoming_checkin_tasks = (
-        Task.query.filter(
-            Task.source == "check_in",
-            Task.assigned_to == current_user.id,
-            Task.status.in_(["todo", "in_progress"]),
-        )
-        .options(joinedload(Task.story).joinedload(Story.epic))
+        upcoming_tasks_query.options(joinedload(Task.story).joinedload(Story.epic), joinedload(Task.assigned_user))
         .order_by(Task.due_date.asc().nulls_last())
         .limit(10)
         .all()
     )
+    # Subset the current user can actually check out / delete (their own tasks, or all if admin).
+    # Managers see the wider department list above for visibility, but Check-Out/Update/Delete
+    # still only act on tasks they're assigned to, created, or (as admin) own outright.
+    own_checkin_tasks = [
+        t
+        for t in upcoming_checkin_tasks
+        if current_user.is_admin or t.assigned_to == current_user.id or t.created_by == current_user.id
+    ]
 
-    # Get active epics for the Check-In Epic -> Story dropdown
+    # Get active epics for the Check-In Epic -> Story dropdown (scoped to own department)
     epics = (
-        Epic.query.filter_by(status="active")
+        apply_department_scope_via_user_field(Epic.created_by, Epic.query.filter_by(status="active"))
         .order_by(Epic.next_follow_up_date.asc().nulls_first(), Epic.deadline_date.asc().nulls_last())
         .all()
     )
 
-    # Get trending issues for the dashboard box (open ones first, most recent)
+    # Get trending issues for the dashboard box (open ones first, most recent; scoped to own department)
     trending_issues = (
-        TrendingIssue.query.order_by(TrendingIssue.status.asc(), TrendingIssue.created_at.desc()).limit(5).all()
+        apply_department_scope_via_user_field(TrendingIssue.created_by, TrendingIssue.query)
+        .order_by(TrendingIssue.status.asc(), TrendingIssue.created_at.desc())
+        .limit(5)
+        .all()
     )
 
     # Get active projects and clients for timer dropdown (scoped for subcontractors)
@@ -285,6 +299,7 @@ def dashboard():
         "recent_tags": recent_tags,
         "timer_stopped_toast": timer_stopped_toast,
         "upcoming_checkin_tasks": upcoming_checkin_tasks,
+        "own_checkin_tasks": own_checkin_tasks,
         "today_iso": now_in_app_timezone().date().isoformat(),
         "today": now_in_app_timezone().date(),
         "epics": epics,

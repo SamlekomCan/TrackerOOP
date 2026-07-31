@@ -43,6 +43,18 @@
                     Select the primary role for this user. Additional roles can be assigned via "Manage Roles & Permissions" below.
                 </p>
             </div>
+            <div>
+                <label for="department_id" class="form-label">{{ _('Department') }}</label>
+                <select name="department_id" id="department_id" class="form-input">
+                    <option value="">{{ _('No department (admins only see everything regardless)') }}</option>
+                    {% for department in all_departments %}
+                    <option value="{{ department.id }}" {% if user and user.department_id == department.id %}selected{% endif %}>{{ department.name }}</option>
+                    {% endfor %}
+                </select>
+                <p class="text-xs text-text-muted-light dark:text-text-muted-dark mt-1">
+                    {{ _('Privacy boundary: this user only sees Epics, Trending Issues, and check-in tasks within their own department. Users with no department see none of that data until assigned.') }}
+                </p>
+            </div>
             {% if not user %}
             <div>
                 <label for="default_password" class="form-label">Default Password</label>

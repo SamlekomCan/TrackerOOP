@@ -92,7 +92,14 @@ def comparison_view():
 
     period = request.args.get("period", "month")
     can_view_all = current_user.is_admin or current_user.has_permission("view_all_time_entries")
-    data = ReportingService().get_comparison_data(period=period, user_id=current_user.id, can_view_all=can_view_all)
+    from app.utils.scope_filter import get_report_scoped_user_ids
+
+    data = ReportingService().get_comparison_data(
+        period=period,
+        user_id=current_user.id,
+        can_view_all=can_view_all,
+        scoped_user_ids=get_report_scoped_user_ids(current_user),
+    )
     return jsonify(data)
 
 
@@ -102,7 +109,7 @@ def comparison_view():
 def project_report():
     """Project-based time report"""
     from app.services import ReportingService
-    from app.utils.scope_filter import apply_project_scope_to_model
+    from app.utils.scope_filter import apply_project_scope_to_model, combine_id_scopes, get_department_scoped_project_ids
 
     project_id = request.args.get("project_id", type=int)
     start_date = request.args.get("start_date")
@@ -113,8 +120,17 @@ def project_report():
     scope_p = apply_project_scope_to_model(Project, current_user)
     if scope_p is not None:
         projects_query = projects_query.filter(scope_p)
+    dept_project_ids = get_department_scoped_project_ids(current_user)
+    if dept_project_ids is not None:
+        projects_query = projects_query.filter(Project.id.in_(dept_project_ids))
     projects = projects_query.all()
     users = User.query.filter_by(is_active=True).order_by(User.username).all()
+    if not current_user.is_admin:
+        from app.utils.scope_filter import get_report_scoped_user_ids
+
+        _report_scoped_ids = get_report_scoped_user_ids(current_user)
+        if _report_scoped_ids is not None:
+            users = [u for u in users if u.id in _report_scoped_ids]
 
     if not start_date:
         start_date = (datetime.utcnow() - timedelta(days=30)).strftime("%Y-%m-%d")
@@ -129,7 +145,13 @@ def project_report():
         return render_template("reports/project_report.html", projects=projects, users=users)
 
     can_view_all = current_user.is_admin or current_user.has_permission("view_all_time_entries")
+    from app.utils.scope_filter import get_report_scoped_user_ids
+
+    report_scoped_user_ids = get_report_scoped_user_ids(current_user)
     if user_id and not can_view_all and user_id != current_user.id:
+        flash(_("You do not have permission to view other users' time entries"), "error")
+        return render_template("reports/project_report.html", projects=projects, users=users)
+    if user_id and report_scoped_user_ids is not None and user_id not in report_scoped_user_ids:
         flash(_("You do not have permission to view other users' time entries"), "error")
         return render_template("reports/project_report.html", projects=projects, users=users)
 
@@ -140,6 +162,7 @@ def project_report():
         user_id_filter=user_id,
         current_user_id=current_user.id,
         can_view_all=can_view_all,
+        scoped_user_ids=report_scoped_user_ids,
     )
     return render_template(
         "reports/project_report.html",
@@ -167,6 +190,12 @@ def user_report():
 
     # Get users for filter
     users = User.query.filter_by(is_active=True).order_by(User.username).all()
+    if not current_user.is_admin:
+        from app.utils.scope_filter import get_report_scoped_user_ids
+
+        _report_scoped_ids = get_report_scoped_user_ids(current_user)
+        if _report_scoped_ids is not None:
+            users = [u for u in users if u.id in _report_scoped_ids]
     from app.utils.scope_filter import apply_project_scope_to_model
 
     projects_query = Project.query.filter_by(status="active").order_by(Project.name)
@@ -197,6 +226,13 @@ def user_report():
     # Filter by user if no permission to view all
     if not can_view_all:
         query = query.filter(TimeEntry.user_id == current_user.id)
+    elif not current_user.is_admin:
+        # "View all" via permission (e.g. manager role) is bounded to the user's own department
+        from app.utils.scope_filter import get_department_scoped_user_ids
+
+        _dept_scoped_ids = get_department_scoped_user_ids(current_user)
+        if _dept_scoped_ids is not None:
+            query = query.filter(TimeEntry.user_id.in_(_dept_scoped_ids))
 
     if user_id:
         # Only allow filtering by other users if they have permission
@@ -287,6 +323,12 @@ def export_form():
     users = []
     if current_user.is_admin:
         users = User.query.filter_by(is_active=True).order_by(User.username).all()
+        if not current_user.is_admin:
+            from app.utils.scope_filter import get_report_scoped_user_ids
+
+            _report_scoped_ids = get_report_scoped_user_ids(current_user)
+            if _report_scoped_ids is not None:
+                users = [u for u in users if u.id in _report_scoped_ids]
 
     # Get all active projects (scoped for subcontractors)
     from app.utils.scope_filter import apply_client_scope_to_model, apply_project_scope_to_model
@@ -377,6 +419,13 @@ def export_csv():
     # Filter by user if no permission to view all
     if not can_view_all:
         query = query.filter(TimeEntry.user_id == current_user.id)
+    elif not current_user.is_admin:
+        # "View all" via permission (e.g. manager role) is bounded to the user's own department
+        from app.utils.scope_filter import get_department_scoped_user_ids
+
+        _dept_scoped_ids = get_department_scoped_user_ids(current_user)
+        if _dept_scoped_ids is not None:
+            query = query.filter(TimeEntry.user_id.in_(_dept_scoped_ids))
 
     if user_id:
         # Only allow filtering by other users if they have permission
@@ -679,6 +728,12 @@ def task_report():
         projects_query = projects_query.filter(scope_p)
     projects = projects_query.all()
     users = User.query.filter_by(is_active=True).order_by(User.username).all()
+    if not current_user.is_admin:
+        from app.utils.scope_filter import get_report_scoped_user_ids
+
+        _report_scoped_ids = get_report_scoped_user_ids(current_user)
+        if _report_scoped_ids is not None:
+            users = [u for u in users if u.id in _report_scoped_ids]
 
     # Default date range: last 30 days
     if not start_date:
@@ -797,6 +852,13 @@ def _time_entries_report_query(request, require_dates=True, return_query=False):
 
     if not can_view_all:
         query = query.filter(TimeEntry.user_id == current_user.id)
+    elif not current_user.is_admin:
+        # "View all" via permission (e.g. manager role) is bounded to the user's own department
+        from app.utils.scope_filter import get_department_scoped_user_ids
+
+        _dept_scoped_ids = get_department_scoped_user_ids(current_user)
+        if _dept_scoped_ids is not None:
+            query = query.filter(TimeEntry.user_id.in_(_dept_scoped_ids))
 
     if user_id:
         if can_view_all:
@@ -865,6 +927,12 @@ def time_entries_report():
         projects_query = projects_query.filter(scope_p)
     projects = projects_query.all()
     users = User.query.filter_by(is_active=True).order_by(User.username).all()
+    if not current_user.is_admin:
+        from app.utils.scope_filter import get_report_scoped_user_ids
+
+        _report_scoped_ids = get_report_scoped_user_ids(current_user)
+        if _report_scoped_ids is not None:
+            users = [u for u in users if u.id in _report_scoped_ids]
     clients_query = Client.query.filter_by(status="active").order_by(Client.name)
     scope_c = apply_client_scope_to_model(Client, current_user)
     if scope_c is not None:
@@ -1079,6 +1147,13 @@ def export_excel():
     # Filter by user if no permission to view all
     if not can_view_all:
         query = query.filter(TimeEntry.user_id == current_user.id)
+    elif not current_user.is_admin:
+        # "View all" via permission (e.g. manager role) is bounded to the user's own department
+        from app.utils.scope_filter import get_department_scoped_user_ids
+
+        _dept_scoped_ids = get_department_scoped_user_ids(current_user)
+        if _dept_scoped_ids is not None:
+            query = query.filter(TimeEntry.user_id.in_(_dept_scoped_ids))
 
     if user_id:
         # Only allow filtering by other users if they have permission
@@ -1158,6 +1233,13 @@ def export_project_excel():
     # Filter by user if no permission to view all
     if not can_view_all:
         query = query.filter(TimeEntry.user_id == current_user.id)
+    elif not current_user.is_admin:
+        # "View all" via permission (e.g. manager role) is bounded to the user's own department
+        from app.utils.scope_filter import get_department_scoped_user_ids
+
+        _dept_scoped_ids = get_department_scoped_user_ids(current_user)
+        if _dept_scoped_ids is not None:
+            query = query.filter(TimeEntry.user_id.in_(_dept_scoped_ids))
 
     if project_id:
         query = query.filter(TimeEntry.project_id == project_id)
@@ -1255,6 +1337,13 @@ def export_user_excel():
     # Filter by user if no permission to view all
     if not can_view_all:
         query = query.filter(TimeEntry.user_id == current_user.id)
+    elif not current_user.is_admin:
+        # "View all" via permission (e.g. manager role) is bounded to the user's own department
+        from app.utils.scope_filter import get_department_scoped_user_ids
+
+        _dept_scoped_ids = get_department_scoped_user_ids(current_user)
+        if _dept_scoped_ids is not None:
+            query = query.filter(TimeEntry.user_id.in_(_dept_scoped_ids))
 
     if user_id:
         # Only allow filtering by other users if they have permission
@@ -1430,6 +1519,13 @@ def export_user_entries_excel():
     # Filter by user if no permission to view all
     if not can_view_all:
         query = query.filter(TimeEntry.user_id == current_user.id)
+    elif not current_user.is_admin:
+        # "View all" via permission (e.g. manager role) is bounded to the user's own department
+        from app.utils.scope_filter import get_department_scoped_user_ids
+
+        _dept_scoped_ids = get_department_scoped_user_ids(current_user)
+        if _dept_scoped_ids is not None:
+            query = query.filter(TimeEntry.user_id.in_(_dept_scoped_ids))
 
     if user_id:
         # Only allow filtering by other users if they have permission
@@ -1628,12 +1724,13 @@ def unpaid_hours_report():
     client_id = enforce_locked_client_id(client_id)
 
     # Get clients for filter (scoped for subcontractors)
-    from app.utils.scope_filter import apply_client_scope_to_model
+    from app.utils.scope_filter import apply_client_scope_to_model, apply_department_scope_to_model
 
     clients_query = Client.query.filter_by(status="active").order_by(Client.name)
     scope_c = apply_client_scope_to_model(Client, current_user)
     if scope_c is not None:
         clients_query = clients_query.filter(scope_c)
+    clients_query = apply_department_scope_to_model(Client.department_id, clients_query)
     clients = clients_query.all()
     only_one_client = len(clients) == 1
     single_client = clients[0] if only_one_client else None
@@ -1658,6 +1755,7 @@ def unpaid_hours_report():
 
     can_view_all = current_user.is_admin or current_user.has_permission("view_all_time_entries")
     from app.services import ReportingService
+    from app.utils.scope_filter import get_report_scoped_user_ids
 
     data = ReportingService().get_unpaid_hours_report_data(
         start_dt=start_dt,
@@ -1665,6 +1763,7 @@ def unpaid_hours_report():
         client_id=client_id,
         current_user_id=current_user.id,
         can_view_all=can_view_all,
+        scoped_user_ids=get_report_scoped_user_ids(current_user),
     )
     client_data = data["client_data"]
     summary = data["summary"]
@@ -1766,6 +1865,13 @@ def export_unpaid_hours_excel():
     # Filter by user if no permission to view all
     if not can_view_all:
         query = query.filter(TimeEntry.user_id == current_user.id)
+    elif not current_user.is_admin:
+        # "View all" via permission (e.g. manager role) is bounded to the user's own department
+        from app.utils.scope_filter import get_department_scoped_user_ids
+
+        _dept_scoped_ids = get_department_scoped_user_ids(current_user)
+        if _dept_scoped_ids is not None:
+            query = query.filter(TimeEntry.user_id.in_(_dept_scoped_ids))
 
     all_entries = query.all()
 

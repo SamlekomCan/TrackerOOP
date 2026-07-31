@@ -28,6 +28,8 @@ class Client(db.Model):
     prepaid_hours_monthly = db.Column(db.Numeric(7, 2), nullable=True)
     prepaid_reset_day = db.Column(db.Integer, nullable=False, default=1)
     created_by = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    # Privacy/visibility boundary: Projects and Invoices inherit this via their Client.
+    department_id = db.Column(db.Integer, db.ForeignKey("departments.id"), nullable=True, index=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
@@ -47,6 +49,7 @@ class Client(db.Model):
     # Relationships
     projects = db.relationship("Project", backref="client_obj", lazy="dynamic", cascade="all, delete-orphan")
     time_entries = db.relationship("TimeEntry", backref="client", lazy="dynamic", cascade="all, delete-orphan")
+    department = db.relationship("Department", foreign_keys=[department_id])
 
     def __init__(
         self,

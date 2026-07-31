@@ -101,9 +101,16 @@ def list_projects():
 
     project_service = ProjectService()
 
-    from app.utils.scope_filter import apply_client_scope_to_model, get_allowed_project_ids
+    from app.utils.scope_filter import (
+        apply_client_scope_to_model,
+        combine_id_scopes,
+        get_allowed_project_ids,
+        get_department_scoped_project_ids,
+    )
 
-    scope_project_ids = get_allowed_project_ids(current_user)
+    scope_project_ids = combine_id_scopes(
+        get_allowed_project_ids(current_user), get_department_scoped_project_ids(current_user)
+    )
 
     # Use service layer to get projects (prevents N+1 queries)
     result = project_service.list_projects(
@@ -127,11 +134,14 @@ def list_projects():
         for (fav_id,) in db.session.query(UserFavoriteProject.project_id).filter_by(user_id=current_user.id).all()
     )
 
-    # Get clients for filter dropdown (scoped for subcontractors)
+    # Get clients for filter dropdown (scoped for subcontractors and department)
+    from app.utils.scope_filter import apply_department_scope_to_model
+
     clients_query = Client.query.filter_by(status="active").order_by(Client.name)
     scope = apply_client_scope_to_model(Client, current_user)
     if scope is not None:
         clients_query = clients_query.filter(scope)
+    clients_query = apply_department_scope_to_model(Client.department_id, clients_query)
     clients = clients_query.all()
     only_one_client = len(clients) == 1
     single_client = clients[0] if only_one_client else None
@@ -548,9 +558,17 @@ def create_project():
 @login_required
 def view_project(project_id):
     """View project details and time entries - REFACTORED to use service layer with eager loading"""
-    from app.utils.scope_filter import user_can_access_project
+    from app.utils.scope_filter import user_can_access_department_owned_record, user_can_access_project
 
     if not user_can_access_project(current_user, project_id):
+        from flask import abort
+
+        abort(403)
+
+    _project_for_scope_check = Project.query.get(project_id)
+    if _project_for_scope_check and not user_can_access_department_owned_record(
+        _project_for_scope_check.client_obj.department_id if _project_for_scope_check.client_obj else None
+    ):
         from flask import abort
 
         abort(403)

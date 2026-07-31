@@ -2218,7 +2218,15 @@ def time_entries_overview():
             client_custom_field[definition.field_key] = field_value
 
     # Permission check: can user view all entries?
+    # Admins are fully unrestricted; everyone else with "view all" (e.g. managers) is
+    # still bounded by their department -- it means "all of my department", not the
+    # whole company.
     can_view_all = current_user.is_admin or current_user.has_permission("view_all_time_entries")
+    from app.utils.scope_filter import get_department_scoped_user_ids
+
+    department_scoped_user_ids = None
+    if can_view_all and not current_user.is_admin:
+        department_scoped_user_ids = get_department_scoped_user_ids(current_user)
 
     # Build query with eager loading to avoid N+1 queries
     query = TimeEntry.query.options(
@@ -2238,6 +2246,9 @@ def time_entries_overview():
     # Filter by user
     if user_id:
         if can_view_all:
+            if department_scoped_user_ids is not None and user_id not in department_scoped_user_ids:
+                flash(_("You do not have permission to view other users' time entries"), "error")
+                return redirect(url_for("timer.time_entries_overview"))
             query = query.filter(TimeEntry.user_id == user_id)
         elif user_id == current_user.id:
             query = query.filter(TimeEntry.user_id == current_user.id)
@@ -2247,6 +2258,9 @@ def time_entries_overview():
     elif not can_view_all:
         # Non-admin users can only see their own entries
         query = query.filter(TimeEntry.user_id == current_user.id)
+    elif department_scoped_user_ids is not None:
+        # "View all" managers only see their own department's users
+        query = query.filter(TimeEntry.user_id.in_(department_scoped_user_ids))
 
     # Filter by project
     if project_id:
@@ -2392,6 +2406,14 @@ def time_entries_overview():
         clients = Client.query.filter_by(status="active").order_by(Client.name).all()
         user_repo = UserRepository()
         users = user_repo.get_active_users()
+        if department_scoped_user_ids is not None:
+            from app.utils.scope_filter import get_department_scoped_client_ids
+
+            users = [u for u in users if u.id in department_scoped_user_ids]
+            dept_client_ids = get_department_scoped_client_ids(current_user) or []
+            clients = [c for c in clients if c.id in dept_client_ids]
+            client_id_set = {c.id for c in clients}
+            projects = [p for p in projects if p.client_id and p.client_id in client_id_set]
     else:
         # For non-admin users, only show their projects
         # Get projects from user's time entries

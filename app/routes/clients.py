@@ -137,11 +137,12 @@ def list_clients():
         query = query.filter(db.or_(*search_conditions))
 
     # Subcontractor scope: restrict to assigned clients
-    from app.utils.scope_filter import apply_client_scope_to_model
+    from app.utils.scope_filter import apply_client_scope_to_model, apply_department_scope_to_model
 
     scope = apply_client_scope_to_model(Client, current_user)
     if scope is not None:
         query = query.filter(scope)
+    query = apply_department_scope_to_model(Client.department_id, query)
 
     clients = query.order_by(Client.name).all()
 
@@ -377,6 +378,8 @@ def create_client():
             prepaid_reset_day=prepaid_reset_day,
             created_by=current_user.id,
         )
+        department_id_input = request.form.get("department_id", "").strip()
+        client.department_id = int(department_id_input) if department_id_input else current_user.department_id
         if custom_fields:
             client.custom_fields = custom_fields
 
@@ -432,10 +435,12 @@ def create_client():
 @login_required
 def view_client(client_id):
     """View client details and projects"""
-    from app.utils.scope_filter import user_can_access_client
+    from app.utils.scope_filter import user_can_access_client, user_can_access_department_owned_record
 
     client = Client.query.get_or_404(client_id)
-    if not user_can_access_client(current_user, client_id):
+    if not user_can_access_client(current_user, client_id) or not user_can_access_department_owned_record(
+        client.department_id
+    ):
         if _wants_json_response():
             return jsonify({"error": "forbidden", "message": _("You do not have access to this client.")}), 403
         abort(403)
@@ -579,10 +584,12 @@ def view_client(client_id):
 @login_required
 def edit_client(client_id):
     """Edit client details"""
-    from app.utils.scope_filter import user_can_access_client
+    from app.utils.scope_filter import user_can_access_client, user_can_access_department_owned_record
 
     client = Client.query.get_or_404(client_id)
-    if not user_can_access_client(current_user, client_id):
+    if not user_can_access_client(current_user, client_id) or not user_can_access_department_owned_record(
+        client.department_id
+    ):
         if _wants_json_response():
             return jsonify({"error": "forbidden", "message": _("You do not have access to this client.")}), 403
         abort(403)
@@ -710,6 +717,9 @@ def edit_client(client_id):
         client.portal_enabled = portal_enabled
         client.portal_issues_enabled = portal_issues_enabled if portal_enabled else False
         client.custom_fields = custom_fields if custom_fields else None
+        if current_user.is_admin:
+            department_id_input = request.form.get("department_id", "").strip()
+            client.department_id = int(department_id_input) if department_id_input else None
 
         # Update portal credentials
         if portal_enabled:
