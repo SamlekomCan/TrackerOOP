@@ -713,10 +713,18 @@ def get_entries():
 
     # Filter by user (if has view_all_time_entries permission or own entries)
     can_view_all = current_user.is_admin or current_user.has_permission("view_all_time_entries")
+    from app.utils.scope_filter import get_report_scoped_user_ids
+
+    _api_scoped_user_ids = get_report_scoped_user_ids(current_user)
     if user_id and can_view_all:
-        query = query.filter(TimeEntry.user_id == user_id)
+        if _api_scoped_user_ids is None or user_id in _api_scoped_user_ids:
+            query = query.filter(TimeEntry.user_id == user_id)
+        else:
+            query = query.filter(TimeEntry.user_id.in_([]))  # never match
     elif not can_view_all:
         query = query.filter(TimeEntry.user_id == current_user.id)
+    elif _api_scoped_user_ids is not None:
+        query = query.filter(TimeEntry.user_id.in_(_api_scoped_user_ids))
 
     # Filter by project
     if project_id:

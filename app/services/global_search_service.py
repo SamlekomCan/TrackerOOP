@@ -48,6 +48,11 @@ def run_global_search(
                 or_(Project.name.ilike(search_pattern), Project.description.ilike(search_pattern)),
             )
             projects_query = apply_project_scope(Project, projects_query, user)
+            from app.utils.scope_filter import get_department_scoped_project_ids
+
+            dept_project_ids = get_department_scoped_project_ids(user)
+            if dept_project_ids is not None:
+                projects_query = projects_query.filter(Project.id.in_(dept_project_ids))
             projects = projects_query.limit(limit).all()
 
             for project in projects:
@@ -83,6 +88,15 @@ def run_global_search(
                 and not getattr(user, "is_client_portal_user", False)
             ):
                 tasks_query = tasks_query.filter(db.or_(Task.assigned_to == user.id, Task.created_by == user.id))
+            elif not user.is_admin:
+                # "View all" via permission (e.g. manager role) is bounded to the user's own department
+                from app.utils.scope_filter import get_department_scoped_user_ids
+
+                dept_user_ids = get_department_scoped_user_ids(user)
+                if dept_user_ids is not None:
+                    tasks_query = tasks_query.filter(
+                        db.or_(Task.assigned_to.in_(dept_user_ids), Task.created_by.in_(dept_user_ids))
+                    )
             tasks = tasks_query.limit(limit).all()
 
             for task in tasks:
@@ -115,6 +129,9 @@ def run_global_search(
                 )
             )
             clients_query = apply_client_scope(Client, clients_query, user)
+            from app.utils.scope_filter import apply_department_scope_to_model
+
+            clients_query = apply_department_scope_to_model(Client.department_id, clients_query, user)
             clients = clients_query.limit(limit).all()
 
             for client in clients:

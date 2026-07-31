@@ -89,6 +89,13 @@ def list_tasks():
         # Only check permission if not admin (roles are already loaded via lazy="joined")
         has_view_all_tasks = current_user.has_permission("view_all_tasks")
 
+    # "View all" via permission (e.g. manager role) is bounded to the user's own department
+    scoped_user_ids = None
+    if has_view_all_tasks and not current_user.is_admin:
+        from app.utils.scope_filter import get_department_scoped_user_ids
+
+        scoped_user_ids = get_department_scoped_user_ids(current_user)
+
     result = task_service.list_tasks(
         status=status if status else None,
         priority=priority if priority else None,
@@ -102,6 +109,7 @@ def list_tasks():
         has_view_all_tasks=has_view_all_tasks,
         page=page,
         per_page=per_page,
+        scoped_user_ids=scoped_user_ids,
     )
 
     # Check if this is an AJAX request
@@ -132,6 +140,15 @@ def list_tasks():
     # Use reasonable limits to avoid loading too many records
     projects = Project.query.filter_by(status="active").order_by(Project.name).limit(500).all()
     users = User.query.filter_by(is_active=True).order_by(User.username).limit(200).all()
+    if not current_user.is_admin:
+        from app.utils.scope_filter import get_department_scoped_project_ids, get_department_scoped_user_ids
+
+        dept_user_ids = get_department_scoped_user_ids(current_user)
+        if dept_user_ids is not None:
+            users = [u for u in users if u.id in dept_user_ids]
+        dept_project_ids = get_department_scoped_project_ids(current_user)
+        if dept_project_ids is not None:
+            projects = [p for p in projects if p.id in dept_project_ids]
 
     # Kanban columns are already loaded in TaskService, but we need them for the template
     # This is a lightweight query, so it's acceptable

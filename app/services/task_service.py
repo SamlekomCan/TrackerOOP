@@ -216,10 +216,14 @@ class TaskService:
         per_page: int = 20,
         project_ids: Optional[list] = None,
         assigned_to_ids: Optional[list] = None,
+        scoped_user_ids: Optional[list] = None,
     ) -> Dict[str, Any]:
         """
         List tasks with filtering and pagination.
         Uses eager loading to prevent N+1 queries.
+
+        scoped_user_ids: if given, bounds "view all" (has_view_all_tasks) to this set of
+            user IDs (e.g. department members) instead of every user in the company.
 
         Returns:
             dict with 'tasks', 'pagination', and 'total' keys
@@ -285,9 +289,12 @@ class TaskService:
             today_local = now_in_app_timezone().date()
             query = query.filter(Task.due_date < today_local, Task.status.in_(["todo", "in_progress", "review"]))
 
-        # Permission filter - users without view_all_tasks permission only see their tasks
+        # Permission filter - users without view_all_tasks permission only see their tasks;
+        # scoped_user_ids (if given) bounds "view all" to a department instead of everyone
         if not has_view_all_tasks and user_id:
             query = query.filter(db.or_(Task.assigned_to == user_id, Task.created_by == user_id))
+        elif has_view_all_tasks and scoped_user_ids is not None:
+            query = query.filter(db.or_(Task.assigned_to.in_(scoped_user_ids), Task.created_by.in_(scoped_user_ids)))
         logger.debug(
             f"[TaskService.list_tasks] Step 3: Applying filters took {(time.time() - step_start) * 1000:.2f}ms"
         )
@@ -340,6 +347,10 @@ class TaskService:
                 )
             if not has_view_all_tasks and user_id:
                 count_query = count_query.filter(db.or_(Task.assigned_to == user_id, Task.created_by == user_id))
+            elif has_view_all_tasks and scoped_user_ids is not None:
+                count_query = count_query.filter(
+                    db.or_(Task.assigned_to.in_(scoped_user_ids), Task.created_by.in_(scoped_user_ids))
+                )
             total = count_query.count()
             logger.debug(f"[TaskService.list_tasks] Count query took {(time.time() - count_start) * 1000:.2f}ms")
         else:

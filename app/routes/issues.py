@@ -77,6 +77,13 @@ def list_issues():
                     Issue.project_id.in_(accessible_project_ids),
                 )
             )
+        else:
+            # "View all" via permission (e.g. manager role) is bounded to the user's own department
+            from app.utils.scope_filter import get_department_scoped_client_ids
+
+            dept_client_ids = get_department_scoped_client_ids(current_user)
+            if dept_client_ids is not None:
+                query = query.filter(Issue.client_id.in_(dept_client_ids))
 
     # Order by priority and creation date
     query = query.order_by(Issue.priority.desc(), Issue.created_at.desc())
@@ -89,6 +96,16 @@ def list_issues():
     clients = Client.query.filter_by(status="active").order_by(Client.name).limit(500).all()
     projects = Project.query.filter_by(status="active").order_by(Project.name).limit(500).all()
     users = User.query.filter_by(is_active=True).order_by(User.username).limit(200).all()
+    if not current_user.is_admin:
+        from app.utils.scope_filter import get_department_scoped_client_ids, get_department_scoped_user_ids
+
+        dept_client_ids_dd = get_department_scoped_client_ids(current_user)
+        if dept_client_ids_dd is not None:
+            clients = [c for c in clients if c.id in dept_client_ids_dd]
+            projects = [p for p in projects if p.client_id in dept_client_ids_dd]
+        dept_user_ids_dd = get_department_scoped_user_ids(current_user)
+        if dept_user_ids_dd is not None:
+            users = [u for u in users if u.id in dept_user_ids_dd]
 
     only_one_client = len(clients) == 1
     single_client = clients[0] if only_one_client else None
@@ -128,6 +145,13 @@ def list_issues():
                     Issue.project_id.in_(db.session.query(user_project_ids)),
                 )
             )
+        else:
+            # "View all" via permission (e.g. manager role) is bounded to the user's own department
+            from app.utils.scope_filter import get_department_scoped_client_ids
+
+            dept_client_ids = get_department_scoped_client_ids(current_user)
+            if dept_client_ids is not None:
+                stats_query = stats_query.filter(Issue.client_id.in_(dept_client_ids))
 
     total_issues = stats_query.count()
     open_issues = stats_query.filter(Issue.status.in_(["open", "in_progress"])).count()
@@ -267,6 +291,14 @@ def view_issue(issue_id):
                 )
 
             if not has_access:
+                flash(_("You do not have permission to view this issue."), "error")
+                return redirect(url_for("issues.list_issues"))
+        else:
+            # "View all" via permission (e.g. manager role) is bounded to the user's own department
+            from app.utils.scope_filter import user_can_access_department_owned_record
+
+            issue_dept_id = issue.client.department_id if issue.client else None
+            if not user_can_access_department_owned_record(issue_dept_id):
                 flash(_("You do not have permission to view this issue."), "error")
                 return redirect(url_for("issues.list_issues"))
 
