@@ -349,7 +349,7 @@ class GoogleCalendarConnector(BaseConnector):
 
                         # Check if already synced by querying Google Calendar for events with our marker
                         # Note: IntegrationExternalEventLink requires time_entry_id, so we can't use it for CalendarEvent
-                        marker = f"TimeTracker: Created from calendar event [CalendarEvent: {calendar_event.id}]"
+                        marker = f"NDSTracker: Created from calendar event [CalendarEvent: {calendar_event.id}]"
 
                         # Query Google Calendar to find existing events with this marker
                         # Use a time range around the calendar event to find it
@@ -459,7 +459,7 @@ class GoogleCalendarConnector(BaseConnector):
 
                         # Skip events we created (check description for marker)
                         description = event.get("description") or ""
-                        if description.startswith("TimeTracker:"):
+                        if description.startswith("NDSTracker:"):
                             logger.debug(f"Skipping event {event_id} - created by TimeTracker")
                             skipped += 1
                             skipped_reasons["time_tracker_created"] += 1
@@ -634,7 +634,7 @@ class GoogleCalendarConnector(BaseConnector):
                     message_parts.append(f"TimeTracker→Calendar: synced {time_tracker_to_calendar_count} items")
             if sync_direction in ["calendar_to_time_tracker", "bidirectional"]:
                 if imported > 0:
-                    message_parts.append(f"Calendar→TimeTracker: imported {imported} events")
+                    message_parts.append(f"Calendar→NDSTracker: imported {imported} events")
                 if skipped > 0:
                     skipped_summary = ", ".join([f"{k}={v}" for k, v in skipped_reasons.items() if v > 0])
                     message_parts.append(f"({skipped} skipped: {skipped_summary})")
@@ -678,12 +678,12 @@ class GoogleCalendarConnector(BaseConnector):
         # Build description
         description_parts = []
         # Add marker to identify TimeTracker-created events
-        description_parts.append("TimeTracker: Created from time entry")
+        description_parts.append("NDSTracker: Created from time entry")
         if time_entry.notes:
             description_parts.append(time_entry.notes)
         if time_entry.tags:
             description_parts.append(f"Tags: {time_entry.tags}")
-        description = "\n\n".join(description_parts) if description_parts else "TimeTracker: Created from time entry"
+        description = "\n\n".join(description_parts) if description_parts else "NDSTracker: Created from time entry"
 
         # Convert local naive datetimes to UTC for Google Calendar API
         from app.utils.timezone import local_to_utc
@@ -730,12 +730,12 @@ class GoogleCalendarConnector(BaseConnector):
         # Build description
         description_parts = []
         # Add marker to identify TimeTracker-created events
-        description_parts.append("TimeTracker: Created from time entry")
+        description_parts.append("NDSTracker: Created from time entry")
         if time_entry.notes:
             description_parts.append(time_entry.notes)
         if time_entry.tags:
             description_parts.append(f"Tags: {time_entry.tags}")
-        description = "\n\n".join(description_parts) if description_parts else "TimeTracker: Created from time entry"
+        description = "\n\n".join(description_parts) if description_parts else "NDSTracker: Created from time entry"
 
         # Get existing event
         event = service.events().get(calendarId=calendar_id, eventId=event_id).execute()
@@ -770,7 +770,7 @@ class GoogleCalendarConnector(BaseConnector):
 
         # Build description - remove import markers if present
         description_parts = []
-        description_parts.append(f"TimeTracker: Created from calendar event [CalendarEvent: {calendar_event.id}]")
+        description_parts.append(f"NDSTracker: Created from calendar event [CalendarEvent: {calendar_event.id}]")
 
         if calendar_event.description:
             # Remove the [Google Calendar: event_id] marker if present (it's only for tracking imports)
@@ -788,7 +788,7 @@ class GoogleCalendarConnector(BaseConnector):
         description = (
             "\n\n".join(description_parts)
             if description_parts
-            else f"TimeTracker: Created from calendar event [CalendarEvent: {calendar_event.id}]"
+            else f"NDSTracker: Created from calendar event [CalendarEvent: {calendar_event.id}]"
         )
 
         # Convert local naive datetimes to UTC for Google Calendar API
@@ -823,7 +823,7 @@ class GoogleCalendarConnector(BaseConnector):
 
         # Build description - remove import markers if present
         description_parts = []
-        description_parts.append(f"TimeTracker: Created from calendar event [CalendarEvent: {calendar_event.id}]")
+        description_parts.append(f"NDSTracker: Created from calendar event [CalendarEvent: {calendar_event.id}]")
 
         if calendar_event.description:
             # Remove the [Google Calendar: event_id] marker if present (it's only for tracking imports)
@@ -841,7 +841,7 @@ class GoogleCalendarConnector(BaseConnector):
         description = (
             "\n\n".join(description_parts)
             if description_parts
-            else f"TimeTracker: Created from calendar event [CalendarEvent: {calendar_event.id}]"
+            else f"NDSTracker: Created from calendar event [CalendarEvent: {calendar_event.id}]"
         )
 
         # Get existing event
@@ -886,12 +886,12 @@ class GoogleCalendarConnector(BaseConnector):
                     "type": "select",
                     "label": "Sync Direction",
                     "options": [
-                        {"value": "time_tracker_to_calendar", "label": "TimeTracker → Calendar (Export only)"},
-                        {"value": "calendar_to_time_tracker", "label": "Calendar → TimeTracker (Import only)"},
+                        {"value": "time_tracker_to_calendar", "label": "NDSTracker → Calendar (Export only)"},
+                        {"value": "calendar_to_time_tracker", "label": "Calendar → NDSTracker (Import only)"},
                         {"value": "bidirectional", "label": "Bidirectional (Two-way sync)"},
                     ],
                     "default": "time_tracker_to_calendar",
-                    "description": "Choose how data flows between Google Calendar and TimeTracker",
+                    "description": "Choose how data flows between Google Calendar and NDSTracker",
                 },
                 {
                     "name": "sync_items",

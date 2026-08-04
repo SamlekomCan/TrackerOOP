@@ -904,7 +904,12 @@ def manage_integration(provider):
 @integrations_bp.route("/integrations/jira/backlog")
 @login_required
 def jira_sprint_backlog():
-    """Show the active sprint backlog (top-level issues) for the configured Jira board."""
+    """Show the active sprint backlog (top-level issues) for a Jira board (squad).
+
+    Defaults to the configured board; pass ?board=<name> to view another squad's
+    backlog, picked from the dropdown (scoped to the configured Jira project key
+    so it stays short even on Jira instances with thousands of boards).
+    """
     service = IntegrationService()
     integration = service.get_global_integration("jira")
     if not integration:
@@ -916,7 +921,17 @@ def jira_sprint_backlog():
         flash(_("Could not initialize Jira connector."), "error")
         return redirect(url_for("integrations.manage_integration", provider="jira"))
 
-    result = connector.get_active_sprint_backlog()
+    selected_board = (request.args.get("board") or "").strip() or None
+    if selected_board:
+        # Remember the choice so the Dashboard widget shows the same board too.
+        session["jira_dashboard_board"] = selected_board
+    else:
+        selected_board = session.get("jira_dashboard_board")
+
+    boards_result = connector.list_boards_for_project()
+    boards = boards_result.get("boards", []) if boards_result.get("success") else []
+
+    result = connector.get_active_sprint_backlog(board_name=selected_board)
     if not result.get("success"):
         flash(_("Could not load sprint backlog: %(message)s", message=result.get("message", "Unknown error")), "error")
         return redirect(url_for("integrations.manage_integration", provider="jira"))
@@ -926,7 +941,25 @@ def jira_sprint_backlog():
         board=result.get("board"),
         sprint=result.get("sprint"),
         issues=result.get("issues", []),
+        boards=boards,
+        selected_board=selected_board or (result.get("board") or {}).get("name"),
     )
+
+
+@integrations_bp.route("/integrations/jira/dashboard-widget")
+@login_required
+def jira_dashboard_widget():
+    """AJAX endpoint: re-render the Dashboard's Jira widget for a different board,
+    without a full page reload. Also updates the session so the full Sprint Backlog
+    page and the widget stay in sync with each other."""
+    from app.utils.jira_widget import get_jira_widget_data
+
+    board_name = (request.args.get("board") or "").strip() or None
+    if board_name:
+        session["jira_dashboard_board"] = board_name
+
+    jira_widget = get_jira_widget_data(board_name=board_name or session.get("jira_dashboard_board"))
+    return render_template("integrations/_jira_widget_content.html", jira_widget=jira_widget)
 
 
 @integrations_bp.route("/integrations/<int:integration_id>")

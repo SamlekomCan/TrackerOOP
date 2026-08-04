@@ -281,8 +281,8 @@ class SlackConnector(BaseConnector):
                     "type": "select",
                     "label": "Sync Direction",
                     "options": [
-                        {"value": "slack_to_timetracker", "label": "Slack → TimeTracker (Import only)"},
-                        {"value": "timetracker_to_slack", "label": "TimeTracker → Slack (Export only)"},
+                        {"value": "slack_to_timetracker", "label": "Slack → NDSTracker (Import only)"},
+                        {"value": "timetracker_to_slack", "label": "NDSTracker → Slack (Export only)"},
                         {"value": "bidirectional", "label": "Bidirectional (Two-way sync)"},
                     ],
                     "default": "slack_to_timetracker",

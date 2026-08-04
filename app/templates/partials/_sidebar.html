@@ -2,8 +2,8 @@
    is_module_enabled() (app/utils/module_helpers.py). #}
         <aside id="sidebar" class="sidebar-scrollbar-hover w-64 bg-card-light dark:bg-card-dark text-text-light dark:text-text-dark p-4 flex-col hidden md:flex transition-all duration-200 ease-in-out fixed top-0 left-0 h-screen overflow-y-auto z-10" aria-label="{{ _('Main navigation') }}">
             <div class="sidebar-header flex items-center mb-8 gap-1">
-                <img src="{{ url_for('static', filename='images/timetracker-logo.svg') }}" alt="Logo" class="h-10 w-10 mr-2 shrink-0">
-                <h1 class="text-2xl font-bold text-primary sidebar-header-title min-w-0"><a href="{{ url_for('main.dashboard') }}" class="no-underline">TimeTracker</a></h1>
+                <img src="{{ url_for('static', filename='images/timetracker-logo.svg') }}" alt="Logo" class="h-14 w-14 mr-2 shrink-0">
+                <h1 class="text-lg font-bold text-primary sidebar-header-title min-w-0"><a href="{{ url_for('main.dashboard') }}" class="no-underline">NDSTracker</a></h1>
                 <button id="sidebarCollapseBtn" type="button" class="ml-auto shrink-0 p-1.5 rounded hover:bg-background-light dark:hover:bg-background-dark" aria-label="{{ _('Toggle sidebar') }}" title="{{ _('Toggle sidebar') }}">
                     <i id="sidebarCollapseIcon" class="fas fa-angles-left"></i>
                 </button>
@@ -50,24 +50,22 @@
                             <span class="ml-3 sidebar-label">{{ _('Dashboard') }}</span>
                         </a>
                     </li>
+                    {% if is_module_enabled('my_productivity') %}
                     <li class="mt-1">
                         <a href="{{ url_for('main.productivity_dashboard') }}" class="sidebar-nav-item flex items-center p-2 rounded-lg border-l-4 {% if ep == 'main.productivity_dashboard' %}border-primary bg-primary/5 dark:bg-primary/10 text-primary font-semibold{% else %}border-transparent text-text-light dark:text-text-dark hover:bg-background-light dark:hover:bg-background-dark{% endif %}" title="{{ _('My productivity') }}">
                             <i class="fas fa-chart-line w-6 text-center"></i>
                             <span class="ml-3 sidebar-label">{{ _('My productivity') }}</span>
                         </a>
                     </li>
-                    <li class="mt-1">
-                        <a href="{{ url_for('timer.manual_entry') }}" class="sidebar-nav-item flex items-center p-2 rounded-lg border-l-4 {% if ep.startswith('timer.') and ep != 'timer.time_entries_overview' %}border-primary bg-primary/5 dark:bg-primary/10 text-primary font-semibold{% else %}border-transparent text-text-light dark:text-text-dark hover:bg-background-light dark:hover:bg-background-dark{% endif %}" title="{{ _('Timer') }}">
-                            <i class="fas fa-stopwatch w-6 text-center"></i>
-                            <span class="ml-3 sidebar-label">{{ _('Timer') }}</span>
-                        </a>
-                    </li>
+                    {% endif %}
+                    {% if is_module_enabled('time_entries_nav') %}
                     <li class="mt-1">
                         <a href="{{ url_for('timer.time_entries_overview') }}" class="sidebar-nav-item flex items-center p-2 rounded-lg border-l-4 {% if ep == 'timer.time_entries_overview' %}border-primary bg-primary/5 dark:bg-primary/10 text-primary font-semibold{% else %}border-transparent text-text-light dark:text-text-dark hover:bg-background-light dark:hover:bg-background-dark{% endif %}" title="{{ _('Time entries') }}">
                             <i class="fas fa-list-alt w-6 text-center"></i>
                             <span class="ml-3 sidebar-label">{{ _('Time entries') }}</span>
                         </a>
                     </li>
+                    {% endif %}
                     {% if is_module_enabled('reports') %}
                     <li class="mt-1">
                         <a href="{{ url_for('reports.reports') }}" class="sidebar-nav-item flex items-center p-2 rounded-lg border-l-4 {% if ep.startswith('reports.') and not ep.startswith('scheduled_reports.') and not ep.startswith('custom_reports.') %}border-primary bg-primary/5 dark:bg-primary/10 text-primary font-semibold{% else %}border-transparent text-text-light dark:text-text-dark hover:bg-background-light dark:hover:bg-background-dark{% endif %}" title="{{ _('Reports') }}">
@@ -127,11 +125,6 @@
                                 </a>
                             </li>
                             {% endif %}
-                            <li>
-                                <a class="block px-2 py-1 rounded {% if nav_active_projects %}text-primary font-semibold bg-background-light dark:bg-background-dark{% else %}text-text-light dark:text-text-dark hover:bg-background-light dark:hover:bg-background-dark{% endif %}" href="{{ url_for('projects.list_projects') }}">
-                                    <i class="fas fa-folder w-4 mr-2"></i>{{ _('Projects') }}
-                                </a>
-                            </li>
                             {% if is_module_enabled('project_templates') %}
                             <li>
                                 <a class="block px-2 py-1 rounded {% if nav_active_project_templates %}text-primary font-semibold bg-background-light dark:bg-background-dark{% else %}text-text-light dark:text-text-dark hover:bg-background-light dark:hover:bg-background-dark{% endif %}" href="{{ url_for('project_templates.list_templates') }}">
@@ -146,11 +139,6 @@
                                 </a>
                             </li>
                             {% endif %}
-                            <li>
-                                <a class="block px-2 py-1 rounded {% if nav_active_tasks %}text-primary font-semibold bg-background-light dark:bg-background-dark{% else %}text-text-light dark:text-text-dark hover:bg-background-light dark:hover:bg-background-dark{% endif %}" href="{{ url_for('tasks.list_tasks') }}">
-                                    <i class="fas fa-tasks w-4 mr-2"></i>{{ _('Tasks') }}
-                                </a>
-                            </li>
                             {% if is_module_enabled('issues') and (current_user.is_admin or has_permission('view_all_issues') or has_permission('create_issues')) %}
                             <li>
                                 <a class="block px-2 py-1 rounded {% if nav_active_issues %}text-primary font-semibold bg-background-light dark:bg-background-dark{% else %}text-text-light dark:text-text-dark hover:bg-background-light dark:hover:bg-background-dark{% endif %}" href="{{ url_for('issues.list_issues') }}">
@@ -172,11 +160,13 @@
                                 </a>
                             </li>
                             {% endif %}
+                            {% if is_module_enabled('workforce') %}
                             <li>
                                 <a class="block px-2 py-1 rounded {% if nav_active_workforce %}text-primary font-semibold bg-background-light dark:bg-background-dark{% else %}text-text-light dark:text-text-dark hover:bg-background-light dark:hover:bg-background-dark{% endif %}" href="{{ url_for('workforce.dashboard') }}">
                                     <i class="fas fa-user-clock w-4 mr-2"></i>{{ _('Workforce') }}
                                 </a>
                             </li>
+                            {% endif %}
                             {% if is_module_enabled('time_entry_templates') %}
                             <li>
                                 <a class="block px-2 py-1 rounded {% if nav_active_templates %}text-primary font-semibold bg-background-light dark:bg-background-dark{% else %}text-text-light dark:text-text-dark hover:bg-background-light dark:hover:bg-background-dark{% endif %}" href="{{ url_for('time_entry_templates.list_templates') }}">

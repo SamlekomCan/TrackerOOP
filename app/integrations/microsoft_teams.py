@@ -265,8 +265,8 @@ class MicrosoftTeamsConnector(BaseConnector):
                     "type": "select",
                     "label": "Sync Direction",
                     "options": [
-                        {"value": "teams_to_timetracker", "label": "Teams → TimeTracker (Import only)"},
-                        {"value": "timetracker_to_teams", "label": "TimeTracker → Teams (Export only)"},
+                        {"value": "teams_to_timetracker", "label": "Teams → NDSTracker (Import only)"},
+                        {"value": "timetracker_to_teams", "label": "NDSTracker → Teams (Export only)"},
                         {"value": "bidirectional", "label": "Bidirectional (Two-way sync)"},
                     ],
                     "default": "timetracker_to_teams",

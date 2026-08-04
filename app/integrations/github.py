@@ -492,8 +492,8 @@ class GitHubConnector(BaseConnector):
                     "type": "select",
                     "label": "Sync Direction",
                     "options": [
-                        {"value": "github_to_timetracker", "label": "GitHub → TimeTracker (Import only)"},
-                        {"value": "timetracker_to_github", "label": "TimeTracker → GitHub (Export only)"},
+                        {"value": "github_to_timetracker", "label": "GitHub → NDSTracker (Import only)"},
+                        {"value": "timetracker_to_github", "label": "NDSTracker → GitHub (Export only)"},
                         {"value": "bidirectional", "label": "Bidirectional (Two-way sync)"},
                     ],
                     "default": "github_to_timetracker",

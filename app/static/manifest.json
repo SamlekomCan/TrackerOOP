@@ -1,6 +1,6 @@
 {
-  "name": "TimeTracker",
-  "short_name": "Tracker",
+  "name": "NDSTracker",
+  "short_name": "NDSTracker",
   "start_url": "/",
   "display": "standalone",
   "theme_color": "#4F46E5",

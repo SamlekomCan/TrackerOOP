@@ -405,13 +405,61 @@ class JiraConnector(BaseConnector):
                 "issue_key": issue_key,
             }
 
-    def get_active_sprint_backlog(self) -> Dict[str, Any]:
-        """Fetch the active sprint's top-level issues (stories/tasks, no sub-tasks) for a configured board."""
+    def list_boards_for_project(self, project_key: Optional[str] = None) -> Dict[str, Any]:
+        """List Jira boards (squads) scoped to a single project, for the board picker dropdown.
+
+        Large Jira Server/Data Center instances can have thousands of boards across every
+        project, so this always filters server-side by 'projectKeyOrId' (Jira's board API
+        supports this natively) instead of listing everything. Falls back to the
+        'jira_project_key' config value when project_key isn't passed explicitly.
+        """
         token = self.get_access_token()
         if not token:
             return {"success": False, "message": "No access token available"}
 
-        board_name = (self.integration.config.get("jira_board_name") or "").strip()
+        project_key = (project_key or self.integration.config.get("jira_project_key") or "").strip()
+        if not project_key:
+            return {
+                "success": False,
+                "message": "No Jira project key configured. Set 'Project Key' in the Integration Configuration section.",
+            }
+
+        base_url = self.integration.config.get("jira_url", "").rstrip("/")
+        headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
+
+        boards = []
+        start_at = 0
+        try:
+            while True:
+                resp = requests.get(
+                    f"{base_url}/rest/agile/1.0/board",
+                    headers=headers,
+                    params={"projectKeyOrId": project_key, "startAt": start_at, "maxResults": 50},
+                    timeout=8,
+                )
+                if resp.status_code != 200:
+                    return {"success": False, "message": f"Could not list boards: HTTP {resp.status_code}"}
+                data = resp.json()
+                boards.extend({"id": b.get("id"), "name": b.get("name")} for b in data.get("values", []))
+                if data.get("isLast", True) or len(boards) >= 200:
+                    break
+                start_at += 50
+            boards.sort(key=lambda b: (b.get("name") or "").lower())
+            return {"success": True, "boards": boards, "project_key": project_key}
+        except Exception as e:
+            return {"success": False, "message": f"Error listing boards: {str(e)}"}
+
+    def get_active_sprint_backlog(self, board_name: Optional[str] = None) -> Dict[str, Any]:
+        """Fetch the active sprint's top-level issues (stories/tasks, no sub-tasks) for a board.
+
+        board_name overrides the configured default (used by the board picker on the
+        Sprint Backlog page); falls back to the 'jira_board_name' config value.
+        """
+        token = self.get_access_token()
+        if not token:
+            return {"success": False, "message": "No access token available"}
+
+        board_name = (board_name or self.integration.config.get("jira_board_name") or "").strip()
         if not board_name:
             return {
                 "success": False,
@@ -423,7 +471,9 @@ class JiraConnector(BaseConnector):
         headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
 
         try:
-            board_resp = requests.get(f"{base_url}/rest/agile/1.0/board", headers=headers, params={"name": board_name})
+            board_resp = requests.get(
+                f"{base_url}/rest/agile/1.0/board", headers=headers, params={"name": board_name}, timeout=8
+            )
             if board_resp.status_code != 200:
                 return {"success": False, "message": f"Could not look up board: HTTP {board_resp.status_code}"}
 
@@ -436,6 +486,7 @@ class JiraConnector(BaseConnector):
                 f"{base_url}/rest/agile/1.0/board/{board['id']}/sprint",
                 headers=headers,
                 params={"state": "active"},
+                timeout=8,
             )
             if sprint_resp.status_code != 200:
                 return {"success": False, "message": f"Could not fetch active sprint: HTTP {sprint_resp.status_code}"}
@@ -458,6 +509,7 @@ class JiraConnector(BaseConnector):
                     "jql": "issuetype not in subtaskIssueTypes()",
                     "maxResults": 200,
                 },
+                timeout=8,
             )
             if issues_resp.status_code != 200:
                 return {"success": False, "message": f"Could not fetch sprint issues: HTTP {issues_resp.status_code}"}
@@ -671,6 +723,15 @@ class JiraConnector(BaseConnector):
                     "help": "Used by the 'Sprint Backlog' view to look up the board's currently active sprint.",
                 },
                 {
+                    "name": "jira_project_key",
+                    "label": "Project Key (Sprint Backlog board picker)",
+                    "type": "text",
+                    "required": False,
+                    "placeholder": "NDSI",
+                    "description": "Restricts the board picker on the Sprint Backlog page/widget to boards belonging to this project",
+                    "help": "Large Jira instances can have thousands of boards across every project. Set this to your team's project key so the picker only lists your squad's boards.",
+                },
+                {
                     "name": "jira_story_points_field",
                     "label": "Story Points Field ID",
                     "type": "text",
@@ -685,8 +746,8 @@ class JiraConnector(BaseConnector):
                     "type": "select",
                     "label": "Sync Direction",
                     "options": [
-                        {"value": "jira_to_timetracker", "label": "Jira → TimeTracker (Import only)"},
-                        {"value": "timetracker_to_jira", "label": "TimeTracker → Jira (Export only)"},
+                        {"value": "jira_to_timetracker", "label": "Jira → NDSTracker (Import only)"},
+                        {"value": "timetracker_to_jira", "label": "NDSTracker → Jira (Export only)"},
                         {"value": "bidirectional", "label": "Bidirectional (Two-way sync)"},
                     ],
                     "default": "jira_to_timetracker",
@@ -766,6 +827,7 @@ class JiraConnector(BaseConnector):
                         "jql",
                         "webhook_secret",
                         "jira_board_name",
+                        "jira_project_key",
                         "jira_story_points_field",
                     ],
                 },

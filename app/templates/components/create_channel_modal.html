@@ -1,0 +1,118 @@
+{# Create Channel Modal - shared by the full Team Chat page and the floating chat widget #}
+<div id="createChannelModal" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-black/50" data-overlay onclick="closeCreateChannelModal()"></div>
+    <div class="relative flex min-h-full items-start sm:items-center justify-center p-4" data-overlay onclick="if (event.target === this) closeCreateChannelModal()">
+        <div class="relative w-full max-w-md overflow-y-auto overscroll-contain bg-card-light dark:bg-card-dark text-text-light dark:text-text-dark rounded-lg shadow-lg" style="max-height: 85vh;">
+            <div class="p-4 border-b border-border-light dark:border-border-dark flex items-center justify-between">
+                <div class="text-lg font-semibold">{{ _('Create Channel') }}</div>
+                <button type="button" onclick="closeCreateChannelModal()" class="px-2 py-1 text-sm hover:bg-background-light dark:hover:bg-background-dark rounded">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form id="createChannelForm" class="p-4">
+                <div class="space-y-4">
+                    <div>
+                        <label for="createChannelName" class="block text-sm font-medium mb-2">{{ _('Channel Name') }}</label>
+                        <input type="text" id="createChannelName" required class="form-input w-full" placeholder="general">
+                    </div>
+                    <div>
+                        <label for="createChannelDescription" class="block text-sm font-medium mb-2">{{ _('Description') }}</label>
+                        <textarea id="createChannelDescription" rows="3" class="form-input w-full"></textarea>
+                    </div>
+                    <div>
+                        <label class="flex items-center">
+                            <input type="checkbox" id="createChannelPrivate" class="form-checkbox">
+                            <span class="ml-2 text-sm">{{ _('Private channel') }}</span>
+                        </label>
+                    </div>
+                    <p id="createChannelError" class="hidden text-sm text-rose-600 dark:text-rose-400"></p>
+                </div>
+                <div class="flex justify-end gap-2 mt-6">
+                    <button type="button" onclick="closeCreateChannelModal()" class="px-4 py-2 rounded-lg border border-border-light dark:border-border-dark hover:bg-background-light dark:hover:bg-background-dark">{{ _('Cancel') }}</button>
+                    <button type="submit" id="createChannelSubmitBtn" class="bg-primary text-white px-4 py-2 rounded-lg hover:bg-primary-dark transition-colors">
+                        <i class="fas fa-plus mr-1"></i>{{ _('Create') }}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script nonce="{{ csp_nonce() }}">
+function showCreateChannelModal() {
+    const modal = document.getElementById('createChannelModal');
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    const errorEl = document.getElementById('createChannelError');
+    if (errorEl) errorEl.classList.add('hidden');
+    setTimeout(() => {
+        const nameInput = document.getElementById('createChannelName');
+        if (nameInput) nameInput.focus();
+    }, 100);
+}
+
+function closeCreateChannelModal() {
+    const modal = document.getElementById('createChannelModal');
+    if (!modal) return;
+    modal.classList.add('hidden');
+    const form = document.getElementById('createChannelForm');
+    if (form) form.reset();
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('createChannelForm');
+    if (!form) return;
+    form.addEventListener('submit', function(event) {
+        event.preventDefault();
+
+        const nameInput = document.getElementById('createChannelName');
+        const descriptionInput = document.getElementById('createChannelDescription');
+        const privateInput = document.getElementById('createChannelPrivate');
+        const errorEl = document.getElementById('createChannelError');
+        const submitBtn = document.getElementById('createChannelSubmitBtn');
+
+        const name = nameInput ? nameInput.value.trim() : '';
+        if (!name) return;
+
+        if (errorEl) errorEl.classList.add('hidden');
+
+        fetch('/api/chat/channels', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+            },
+            body: JSON.stringify({
+                name: name,
+                description: descriptionInput ? descriptionInput.value.trim() : '',
+                channel_type: (privateInput && privateInput.checked) ? 'private' : 'public'
+            })
+        })
+        .then(response => response.json().then(data => ({ ok: response.ok, data })))
+        .then(({ ok, data }) => {
+            if (!ok || !data.success) {
+                throw new Error(data.error || '{{ _("Failed to create channel") }}');
+            }
+            closeCreateChannelModal();
+            // Full reload keeps every channel list on the page (widget + full chat
+            // page sidebar, which is server-rendered) in sync with the new channel.
+            window.location.reload();
+        })
+        .catch(error => {
+            if (errorEl) {
+                errorEl.textContent = error.message;
+                errorEl.classList.remove('hidden');
+            }
+        })
+        .finally(() => {
+            // interactions.js's sitewide form-submit listener adds a `btn-loading`
+            // class (pointer-events: none) on every submit, expecting a normal page
+            // navigation to clear it. This form only navigates on success (full
+            // reload); on error it stays open, so the class must be removed here or
+            // the button becomes permanently unclickable for a retry.
+            window.TimeTrackerUI?.removeLoadingState(submitBtn);
+        });
+    });
+});
+</script>

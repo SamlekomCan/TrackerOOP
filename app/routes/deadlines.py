@@ -3,7 +3,7 @@ from flask_babel import gettext as _
 from flask_login import login_required, current_user
 from datetime import datetime
 from app import db
-from app.models import Epic, Story
+from app.models import Epic, Story, Task, TaskActivity, Comment
 from app.utils.db import safe_commit
 from app.utils.scope_filter import apply_department_scope_via_user_field, user_can_access_via_department_scope
 from app.utils.timezone import now_in_app_timezone
@@ -61,6 +61,53 @@ def create_epic():
     return render_template("deadlines/create_epic.html")
 
 
+def _followup_history_by_story(story_ids):
+    """Every past Check-In/Check-Out cycle for the given stories, newest first.
+
+    Each Check-In creates a fresh Task (Task.source == "check_in"); Check-Out
+    closes it with exactly one Comment (the free-text note) and exactly one
+    TaskActivity ("check_out" = rescheduled, "cancel" = no further follow-up).
+    Since a checked-out task is never reused, activity + comment pair up 1:1
+    per task with no ambiguity — no new storage needed, just this read-side
+    join over data the check-in/check-out flow already writes.
+    """
+    if not story_ids:
+        return {}
+
+    activities = (
+        TaskActivity.query.join(Task, TaskActivity.task_id == Task.id)
+        .filter(Task.story_id.in_(story_ids), TaskActivity.event.in_(["check_out", "cancel"]))
+        .order_by(TaskActivity.created_at.desc())
+        .all()
+    )
+    if not activities:
+        return {}
+
+    task_ids = {a.task_id for a in activities}
+    tasks_by_id = {t.id: t for t in Task.query.filter(Task.id.in_(task_ids)).all()}
+
+    # Latest comment per task (the check-out note); batch-loaded to avoid N+1.
+    note_by_task = {}
+    for c in Comment.query.filter(Comment.task_id.in_(task_ids)).order_by(Comment.created_at.desc()).all():
+        note_by_task.setdefault(c.task_id, c.content)
+
+    history = {}
+    for activity in activities:
+        task = tasks_by_id.get(activity.task_id)
+        if not task or not task.story_id:
+            continue
+        history.setdefault(task.story_id, []).append(
+            {
+                "date": activity.created_at,
+                "note": note_by_task.get(activity.task_id),
+                "author": activity.user,
+                "resolved": activity.event == "cancel",
+                "next_due_date": task.due_date if activity.event == "check_out" else None,
+            }
+        )
+    return history
+
+
 @deadlines_bp.route("/deadlines/epics/<int:epic_id>")
 @login_required
 @admin_required
@@ -70,7 +117,8 @@ def view_epic(epic_id):
     if not user_can_access_via_department_scope(epic.created_by):
         abort(403)
     stories = Story.query.filter_by(epic_id=epic.id).order_by(Story.status.asc(), Story.name.asc()).all()
-    return render_template("deadlines/view_epic.html", epic=epic, stories=stories)
+    followup_history = _followup_history_by_story([s.id for s in stories])
+    return render_template("deadlines/view_epic.html", epic=epic, stories=stories, followup_history=followup_history)
 
 
 @deadlines_bp.route("/deadlines/epics/<int:epic_id>/edit", methods=["GET", "POST"])

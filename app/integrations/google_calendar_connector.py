@@ -524,7 +524,7 @@ class GoogleCalendarConnector(BaseConnector):
                 continue
             project = Project.query.get(entry.project_id) if entry.project_id else None
             task = Task.query.get(entry.task_id) if entry.task_id else None
-            project_name = project.name if project else "TimeTracker"
+            project_name = project.name if project else "NDSTracker"
             task_name = task.name if task else ((entry.notes or "")[:50])
             summary = f"{TT_MARKER} {project_name} — {task_name}".strip()
             try:
@@ -538,7 +538,7 @@ class GoogleCalendarConnector(BaseConnector):
 
             body = {
                 "summary": summary[:200],
-                "description": f"Logged via TimeTracker. Duration: {entry.duration_formatted}",
+                "description": f"Logged via NDSTracker. Duration: {entry.duration_formatted}",
                 "start": {"dateTime": start_iso, "timeZone": "UTC"},
                 "end": {"dateTime": end_iso, "timeZone": "UTC"},
             }

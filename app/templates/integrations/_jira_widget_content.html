@@ -1,0 +1,52 @@
+{# Inner content of the Jira Sprint Backlog dashboard widget: sprint line + issue table.
+   Rendered both by main/dashboard.html (initial page load) and the AJAX board-switch
+   endpoint (integrations.jira_dashboard_widget), so both stay visually identical. #}
+{% if jira_widget.success %}
+    {% if jira_widget.sprint %}
+    <p class="text-xs text-text-muted-light dark:text-text-muted-dark mb-3">
+        {{ _('Sprint:') }} <span class="font-medium text-text-light dark:text-text-dark">{{ jira_widget.sprint.name }}</span>
+        {% if jira_widget.total_count > 5 %} &middot; {{ _('showing 5 of %(count)s issues', count=jira_widget.total_count) }}{% endif %}
+    </p>
+    <div class="overflow-x-auto">
+        <table class="w-full text-left">
+            <thead class="border-b border-border-light dark:border-border-dark">
+                <tr>
+                    <th class="p-3 text-sm">{{ _('Issue') }}</th>
+                    <th class="p-3 text-sm">{{ _('Status') }}</th>
+                    <th class="p-3 text-sm">{{ _('Assignee') }}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% set status_chip = {'green': 'chip-success', 'yellow': 'chip-warning'} %}
+                {% for issue in jira_widget.issues %}
+                <tr class="border-b border-border-light dark:border-border-dark">
+                    <td class="p-3">
+                        <a href="{{ issue.url }}" target="_blank" rel="noopener" class="text-primary hover:underline font-medium">{{ issue.key }}</a>
+                        <div class="text-xs text-text-muted-light dark:text-text-muted-dark">{{ issue.summary[:60] }}{% if issue.summary|length > 60 %}...{% endif %}</div>
+                    </td>
+                    <td class="p-3">
+                        <span class="chip {{ status_chip.get(issue.status_category, 'chip-neutral') }}">{{ issue.status }}</span>
+                    </td>
+                    <td class="p-3 text-sm">{{ issue.assignee or '—' }}</td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="3" class="p-4 text-center text-text-muted-light dark:text-text-muted-dark">{{ _('No issues in the active sprint.') }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="text-sm text-text-muted-light dark:text-text-muted-dark">{{ _('No active sprint found for the selected board.') }}</p>
+    {% endif %}
+{% else %}
+    <div class="text-sm text-text-muted-light dark:text-text-muted-dark">
+        <i class="fas fa-exclamation-circle text-amber-500 mr-1"></i>
+        {{ _('Could not load Jira sprint backlog.') }}
+        {% if current_user.is_admin %}
+        <div class="text-xs mt-1">{{ jira_widget.message }}</div>
+        <a href="{{ url_for('integrations.manage_integration', provider='jira') }}" class="text-xs text-primary hover:underline">{{ _('Check integration settings') }} &rarr;</a>
+        {% endif %}
+    </div>
+{% endif %}

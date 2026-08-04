@@ -788,7 +788,7 @@ class CalDAVCalendarConnector(BaseConnector):
                             "imported": calendar_result.get("imported", 0),
                             "skipped": calendar_result.get("skipped", 0),
                             "errors": calendar_result.get("errors", []) + tracker_result.get("errors", []),
-                            "message": f"Bidirectional sync: Calendar→TimeTracker: {calendar_result.get('message', '')} | TimeTracker→Calendar: {tracker_result.get('message', '')}",
+                            "message": f"Bidirectional sync: Calendar→NDSTracker: {calendar_result.get('message', '')} | TimeTracker→Calendar: {tracker_result.get('message', '')}",
                         }
                     elif calendar_result.get("success"):
                         return calendar_result
@@ -797,7 +797,7 @@ class CalDAVCalendarConnector(BaseConnector):
                     else:
                         return {
                             "success": False,
-                            "message": f"Both sync directions failed. Calendar→TimeTracker: {calendar_result.get('message')}, TimeTracker→Calendar: {tracker_result.get('message')}",
+                            "message": f"Both sync directions failed. Calendar→NDSTracker: {calendar_result.get('message')}, TimeTracker→Calendar: {tracker_result.get('message')}",
                         }
                 logger.info(f"Calendar→TimeTracker sync completed, returning result")
                 return calendar_result
@@ -1265,7 +1265,7 @@ class CalDAVCalendarConnector(BaseConnector):
                 if time_entry.tags:
                     description_parts.append(f"Tags: {time_entry.tags}")
                 description = (
-                    "\n\n".join(description_parts) if description_parts else "TimeTracker: Created from time entry"
+                    "\n\n".join(description_parts) if description_parts else "NDSTracker: Created from time entry"
                 )
 
                 start_utc = local_to_utc(time_entry.start_time)
@@ -1408,7 +1408,7 @@ class CalDAVCalendarConnector(BaseConnector):
                     description_parts.append(f"Location: {calendar_event.location}")
                 if calendar_event.event_type:
                     description_parts.append(f"Type: {calendar_event.event_type}")
-                description = "\n\n".join(description_parts) if description_parts else "TimeTracker: Calendar event"
+                description = "\n\n".join(description_parts) if description_parts else "NDSTracker: Calendar event"
 
                 # Convert to UTC
                 start_utc = local_to_utc(calendar_event.start_time)
@@ -1554,7 +1554,7 @@ class CalDAVCalendarConnector(BaseConnector):
         event.add("transp", "OPAQUE")
 
         cal = Calendar()
-        cal.add("prodid", "-//TimeTracker//CalDAV Integration//EN")
+        cal.add("prodid", "-//NDSTracker//CalDAV Integration//EN")
         cal.add("version", "2.0")
         cal.add("calscale", "GREGORIAN")
         cal.add("method", "PUBLISH")
@@ -1597,12 +1597,12 @@ class CalDAVCalendarConnector(BaseConnector):
                     "type": "select",
                     "label": "Sync Direction",
                     "options": [
-                        {"value": "calendar_to_time_tracker", "label": "Calendar → TimeTracker (Import only)"},
-                        {"value": "time_tracker_to_calendar", "label": "TimeTracker → Calendar (Export only)"},
+                        {"value": "calendar_to_time_tracker", "label": "Calendar → NDSTracker (Import only)"},
+                        {"value": "time_tracker_to_calendar", "label": "NDSTracker → Calendar (Export only)"},
                         {"value": "bidirectional", "label": "Bidirectional (Two-way sync)"},
                     ],
                     "default": "calendar_to_time_tracker",
-                    "description": "Choose how data flows between CalDAV calendar and TimeTracker",
+                    "description": "Choose how data flows between CalDAV calendar and NDSTracker",
                 },
                 {
                     "name": "sync_items",

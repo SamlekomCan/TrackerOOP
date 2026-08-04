@@ -37,6 +37,12 @@ services:
     container_name: timetracker-app
     environment:
       - TZ=${TZ:-Europe/Brussels}
+      # Eventlet's own DNS resolver (greendns) doesn't reliably follow CNAME
+      # redirects against Docker's embedded DNS (127.0.0.11) -- e.g. hosts like
+      # jira.bri.co.id that resolve via a CNAME to another hostname. This makes
+      # outbound integration calls fail with NameResolutionError even though the
+      # hostname resolves fine everywhere else. Falls back to the OS resolver.
+      - EVENTLET_NO_GREENDNS=yes
       - CURRENCY=${CURRENCY:-EUR}
       - ROUNDING_MINUTES=${ROUNDING_MINUTES:-1}
       - SINGLE_ACTIVE_TIMER=${SINGLE_ACTIVE_TIMER:-true}

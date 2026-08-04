@@ -315,8 +315,8 @@ class AsanaConnector(BaseConnector):
                     "type": "select",
                     "label": "Sync Direction",
                     "options": [
-                        {"value": "asana_to_timetracker", "label": "Asana → TimeTracker (Import only)"},
-                        {"value": "timetracker_to_asana", "label": "TimeTracker → Asana (Export only)"},
+                        {"value": "asana_to_timetracker", "label": "Asana → NDSTracker (Import only)"},
+                        {"value": "timetracker_to_asana", "label": "NDSTracker → Asana (Export only)"},
                         {"value": "bidirectional", "label": "Bidirectional (Two-way sync)"},
                     ],
                     "default": "asana_to_timetracker",

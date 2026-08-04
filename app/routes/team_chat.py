@@ -9,12 +9,83 @@ from flask_babel import gettext as _
 from flask_login import current_user, login_required
 from sqlalchemy import and_, or_
 
-from app import db
+from app import db, socketio
 from app.models import Project, User
 from app.models.team_chat import ChatChannel, ChatChannelMember, ChatMessage, ChatReadReceipt
 from app.utils.module_helpers import module_enabled
 
 team_chat_bp = Blueprint("team_chat", __name__)
+
+
+def _display_channel_name(channel, viewer_id):
+    """Resolve the name to show for a channel from the given viewer's perspective.
+
+    Direct-message channels store a "A & B" name snapshot taken at creation time
+    (see api_create_direct_message), which goes stale if either user's display
+    name changes afterwards. Recompute it live from the other member's current
+    display name instead of trusting the stored value. Group/public channels
+    just use their stored name as-is.
+    """
+    if channel.channel_type != "direct":
+        return channel.name
+    other_member = ChatChannelMember.query.filter(
+        ChatChannelMember.channel_id == channel.id, ChatChannelMember.user_id != viewer_id
+    ).first()
+    if other_member and other_member.user:
+        return other_member.user.display_name
+    return channel.name
+
+
+def _notify_mentions(mentions, channel):
+    """Best-effort "you were mentioned" push notification.
+
+    Never let a notification failure take down message sending: the message
+    is already committed and broadcast by the time this runs, so a broken
+    notification backend should degrade silently rather than turn a
+    successful send into a 500 the client reports as "failed to send".
+    """
+    if not mentions:
+        return
+    try:
+        # NOTE: app.utils.notification_service doesn't actually exist anywhere
+        # in this codebase (same broken import is also present, pre-existing,
+        # in time_approval_service.py / client_approval_service.py /
+        # workflow_engine.py) — this always raises. Left as-is rather than
+        # silently no-op'd so a real notification service, if one gets added
+        # under this path later, starts working here for free; the try/except
+        # is what actually matters for chat: never let this 404-module import
+        # turn a successful message send into a request the client sees fail.
+        from app.utils.notification_service import NotificationService
+
+        service = NotificationService()
+        channel_name = _display_channel_name(channel, current_user.id)
+        for user_id in mentions:
+            service.send_notification(
+                user_id=user_id,
+                title="You were mentioned",
+                message=f"{current_user.display_name} mentioned you in {channel_name}",
+                type="info",
+                priority="high",
+            )
+    except Exception:
+        from flask import current_app
+
+        current_app.logger.warning("Failed to send mention notification", exc_info=True)
+
+
+def _broadcast_new_message(channel_id, message):
+    """Push a chat message to every channel member's personal room in real time.
+
+    Reuses the existing `user_{id}` room that every authenticated page already
+    joins on connect (see base.html's `join_user_room` emit) instead of a
+    separate per-channel room, so no extra client-side join step is needed.
+    """
+    member_user_ids = [
+        row[0] for row in db.session.query(ChatChannelMember.user_id).filter_by(channel_id=channel_id).all()
+    ]
+    payload = message.to_dict()
+    for user_id in member_user_ids:
+        socketio.emit("new_message", payload, room=f"user_{user_id}")
 
 
 @team_chat_bp.route("/chat")
@@ -86,7 +157,28 @@ def chat_channel(channel_id):
 
     db.session.commit()
 
-    return render_template("chat/channel.html", channel=channel, messages=messages, members=members)
+    can_manage_members = _can_manage_channel_members(channel, membership)
+    # Computed separately (not assigned onto `channel.name`) so it can never get
+    # swept up by the db.session.commit() above and persisted as the stored name.
+    channel_display_name = _display_channel_name(channel, current_user.id)
+
+    # For the @mention autocomplete: only members other than yourself, since
+    # parse_mentions() matches on username (see app/models/team_chat.py).
+    mentionable_users = [
+        {"user_id": m.user_id, "username": m.user.username, "display_name": m.user.display_name}
+        for m in members
+        if m.user and m.user_id != current_user.id
+    ]
+
+    return render_template(
+        "chat/channel.html",
+        channel=channel,
+        channel_display_name=channel_display_name,
+        mentionable_users=mentionable_users,
+        messages=messages,
+        members=members,
+        can_manage_members=can_manage_members,
+    )
 
 
 @team_chat_bp.route("/chat/channels/<int:channel_id>/send-message", methods=["POST"])
@@ -155,19 +247,9 @@ def send_message(channel_id):
 
     db.session.commit()
 
-    # Notify mentioned users
-    if mentions:
-        from app.utils.notification_service import NotificationService
+    _broadcast_new_message(channel_id, message)
 
-        service = NotificationService()
-        for user_id in mentions:
-            service.send_notification(
-                user_id=user_id,
-                title="You were mentioned",
-                message=f"{current_user.display_name} mentioned you in {channel.name}",
-                type="info",
-                priority="high",
-            )
+    _notify_mentions(mentions, channel)
 
     if request.is_json or request.headers.get("X-Requested-With") == "XMLHttpRequest":
         return jsonify({"success": True, "message": message.to_dict()})
@@ -181,6 +263,10 @@ def send_message(channel_id):
 def api_channels():
     """Get or create channels"""
     if request.method == "POST":
+        # Only admins and managers can create channels
+        if not (current_user.is_admin or current_user.is_manager):
+            return jsonify({"error": _("Only admins and managers can create channels")}), 403
+
         # Create new channel
         data = request.get_json()
 
@@ -217,7 +303,94 @@ def api_channels():
         .all()
     )
 
-    return jsonify({"channels": [c.to_dict() for c in channels]})
+    channel_dicts = []
+    for c in channels:
+        d = c.to_dict()
+        d["name"] = _display_channel_name(c, current_user.id)
+        channel_dicts.append(d)
+
+    return jsonify({"channels": channel_dicts})
+
+
+def _can_manage_channel_members(channel, membership):
+    """Global admins/managers, or a channel's own admin, can add/remove its members."""
+    if channel.channel_type == "direct":
+        return False
+    if current_user.is_admin or current_user.is_manager:
+        return True
+    return bool(membership and membership.is_admin)
+
+
+@team_chat_bp.route("/api/chat/channels/<int:channel_id>/members", methods=["GET", "POST"])
+@login_required
+@module_enabled("team_chat")
+def api_channel_members(channel_id):
+    """List or add members of a channel"""
+    channel = ChatChannel.query.get_or_404(channel_id)
+    membership = ChatChannelMember.query.filter_by(channel_id=channel_id, user_id=current_user.id).first()
+
+    if request.method == "GET":
+        if not membership and not current_user.is_admin:
+            return jsonify({"error": _("Access denied")}), 403
+        members = ChatChannelMember.query.filter_by(channel_id=channel_id).all()
+        return jsonify(
+            {
+                "members": [
+                    {
+                        "user_id": m.user_id,
+                        "username": m.user.username if m.user else None,
+                        "display_name": m.user.display_name if m.user else None,
+                        "is_admin": m.is_admin,
+                    }
+                    for m in members
+                ]
+            }
+        )
+
+    # POST - add members
+    if not _can_manage_channel_members(channel, membership):
+        return jsonify({"error": _("Only channel admins, managers, or admins can add members")}), 403
+
+    data = request.get_json() or {}
+    user_ids = data.get("user_ids") or []
+    if not user_ids:
+        return jsonify({"error": _("No users specified")}), 400
+
+    existing_ids = {m.user_id for m in ChatChannelMember.query.filter_by(channel_id=channel_id).all()}
+    added = []
+    for user_id in user_ids:
+        if user_id in existing_ids:
+            continue
+        user = User.query.get(user_id)
+        if not user:
+            continue
+        db.session.add(ChatChannelMember(channel_id=channel_id, user_id=user_id))
+        existing_ids.add(user_id)
+        added.append(user_id)
+
+    db.session.commit()
+    return jsonify({"success": True, "added": added})
+
+
+@team_chat_bp.route("/api/chat/channels/<int:channel_id>/members/<int:user_id>", methods=["DELETE"])
+@login_required
+@module_enabled("team_chat")
+def api_channel_remove_member(channel_id, user_id):
+    """Remove a member from a channel (or let a member remove themselves)"""
+    channel = ChatChannel.query.get_or_404(channel_id)
+    membership = ChatChannelMember.query.filter_by(channel_id=channel_id, user_id=current_user.id).first()
+
+    is_self = user_id == current_user.id
+    if not is_self and not _can_manage_channel_members(channel, membership):
+        return jsonify({"error": _("Only channel admins, managers, or admins can remove members")}), 403
+
+    target = ChatChannelMember.query.filter_by(channel_id=channel_id, user_id=user_id).first()
+    if not target:
+        return jsonify({"error": _("User is not a member of this channel")}), 404
+
+    db.session.delete(target)
+    db.session.commit()
+    return jsonify({"success": True})
 
 
 @team_chat_bp.route("/api/chat/channels/<int:channel_id>/messages", methods=["GET", "POST"])
@@ -284,19 +457,9 @@ def api_messages(channel_id):
         channel.updated_at = datetime.utcnow()
         db.session.commit()
 
-        # Notify mentioned users
-        if mentions:
-            from app.utils.notification_service import NotificationService
+        _broadcast_new_message(channel_id, message)
 
-            service = NotificationService()
-            for user_id in mentions:
-                service.send_notification(
-                    user_id=user_id,
-                    title="You were mentioned",
-                    message=f"{current_user.display_name} mentioned you in {channel.name}",
-                    type="info",
-                    priority="high",
-                )
+        _notify_mentions(mentions, channel)
 
         return jsonify({"success": True, "message": message.to_dict()})
 

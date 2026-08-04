@@ -1,17 +1,17 @@
 {% extends "base.html" %}
 {% from "components/ui.html" import page_header %}
 
-{% block title %}{{ channel.name }} - {{ _('Team Chat') }} - {{ app_name }}{% endblock %}
+{% block title %}{{ channel_display_name }} - {{ _('Team Chat') }} - {{ app_name }}{% endblock %}
 
 {% block content %}
 {% set breadcrumbs = [
     {'text': _('Team Chat'), 'url': url_for('team_chat.chat_index')},
-    {'text': channel.name}
+    {'text': channel_display_name}
 ] %}
 
 {{ page_header(
     icon_class='fas fa-comments',
-    title_text='#' ~ channel.name,
+    title_text=(channel_display_name if channel.channel_type == 'direct' else '#' ~ channel_display_name),
     subtitle_text=channel.description if channel.description else _('Team chat channel'),
     breadcrumbs=breadcrumbs
 ) }}
@@ -33,14 +33,12 @@
                         <span class="font-semibold text-text-light dark:text-text-dark">{{ message.user.username if message.user else 'Unknown' }}</span>
                         <span class="text-xs text-text-muted-light dark:text-text-muted-dark">{{ message.created_at|local_time if message.created_at else '' }}</span>
                     </div>
-                    <div class="text-text-light dark:text-text-dark whitespace-pre-wrap">{{ message.content }}</div>
-                    {% if message.attachments %}
+                    <div class="text-text-light dark:text-text-dark whitespace-pre-wrap">{{ message.message|highlight_mentions }}</div>
+                    {% if message.attachment_url and message.attachment_filename %}
                     <div class="mt-2 space-y-1">
-                        {% for attachment in message.attachments %}
-                        <a href="{{ url_for('team_chat.download_attachment', message_id=message.id, attachment_id=attachment.id) }}" class="text-sm text-primary hover:underline">
-                            <i class="fas fa-paperclip mr-1"></i>{{ attachment.filename }}
+                        <a href="{{ url_for('team_chat.download_attachment', channel_id=channel.id, message_id=message.id) }}" class="text-sm text-primary hover:underline">
+                            <i class="fas fa-paperclip mr-1"></i>{{ message.attachment_filename }}
                         </a>
-                        {% endfor %}
                     </div>
                     {% endif %}
                 </div>
@@ -54,6 +52,7 @@
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="flex-1 relative">
                     <textarea id="messageInput" name="content" rows="2" class="form-input w-full resize-none" placeholder="{{ _('Type a message...') }}" required></textarea>
+                    <div id="mentionDropdown" class="hidden chat-mention-dropdown bg-card-light dark:bg-card-dark rounded-lg border border-border-light dark:border-border-dark shadow-lg py-1"></div>
                     <div class="absolute bottom-2 right-2 flex gap-1">
                         <button type="button" onclick="showEmojiPicker()" class="text-text-muted-light dark:text-text-muted-dark hover:text-primary">
                             <i class="fas fa-smile"></i>
@@ -81,15 +80,22 @@
         {% endif %}
 
         <div class="mb-4">
-            <h4 class="text-sm font-semibold mb-2">{{ _('Members') }} ({{ members|length }})</h4>
-            <div class="space-y-2">
+            <div class="flex items-center justify-between mb-2">
+                <h4 class="text-sm font-semibold">{{ _('Members') }} (<span id="channelMemberCount">{{ members|length }}</span>)</h4>
+                {% if can_manage_members %}
+                <button type="button" onclick="showAddMembersModal()" class="text-primary hover:text-primary-dark" title="{{ _('Add members') }}">
+                    <i class="fas fa-user-plus"></i>
+                </button>
+                {% endif %}
+            </div>
+            <div id="channelMembersList" class="space-y-2">
                 {% for member in members %}
                 {% set user = member.user %}
+                <div class="flex items-center gap-2" data-member-user-id="{{ member.user_id }}">
                 {% if user %}
                     {% set user_status = user.get_status() %}
                     {% set status_colors = {'online': 'bg-green-500', 'away': 'bg-yellow-500', 'offline': 'bg-gray-400'} %}
                     {% set status_color = status_colors.get(user_status, 'bg-gray-400') %}
-                    <div class="flex items-center gap-2">
                         <div class="relative flex-shrink-0">
                             {% if user.get_avatar_url() %}
                                 <img src="{{ user.get_avatar_url() }}" alt="{{ user.display_name }}" class="w-8 h-8 rounded-full object-cover" onerror="this.onerror=null; this.style.display='none'; this.nextElementSibling.style.display='flex';">
@@ -105,30 +111,54 @@
                         </div>
                         <div class="flex-1 min-w-0">
                             <span class="text-sm font-medium">{{ user.display_name }}</span>
+                            {% if member.is_admin %}<span class="text-xs text-primary ml-1">({{ _('admin') }})</span>{% endif %}
                             <span class="text-xs text-text-muted-light dark:text-text-muted-dark ml-2 capitalize">({{ user_status }})</span>
                         </div>
-                    </div>
                 {% else %}
-                    <div class="flex items-center gap-2">
                         <div class="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
                             <i class="fas fa-user text-primary text-xs"></i>
                         </div>
-                        <span class="text-sm">Unknown</span>
-                    </div>
+                        <span class="flex-1 text-sm">Unknown</span>
                 {% endif %}
+                {% if channel.channel_type != 'direct' and (can_manage_members or member.user_id == current_user.id) %}
+                    <button type="button" onclick="removeChannelMember({{ member.user_id }})" class="text-text-muted-light dark:text-text-muted-dark hover:text-rose-600 dark:hover:text-rose-400 p-1" title="{{ _('Remove from channel') if member.user_id != current_user.id else _('Leave channel') }}">
+                        <i class="fas fa-times text-xs"></i>
+                    </button>
+                {% endif %}
+                </div>
                 {% endfor %}
             </div>
         </div>
-
-        {% if current_user.is_admin or channel.created_by == current_user.id %}
-        <div class="pt-4 border-t border-border-light dark:border-border-dark">
-            <a href="{{ url_for('team_chat.edit_channel', channel_id=channel.id) }}" class="text-sm text-primary hover:underline">
-                <i class="fas fa-cog mr-1"></i>{{ _('Channel Settings') }}
-            </a>
-        </div>
-        {% endif %}
     </div>
 </div>
+
+{% if can_manage_members %}
+<!-- Add Members Modal -->
+<div id="addMembersModal" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-black/50" data-overlay onclick="closeAddMembersModal()"></div>
+    <div class="relative flex min-h-full items-start sm:items-center justify-center p-4" data-overlay onclick="if (event.target === this) closeAddMembersModal()">
+        <div class="relative w-full max-w-md overflow-y-auto overscroll-contain bg-card-light dark:bg-card-dark text-text-light dark:text-text-dark rounded-lg shadow-lg flex flex-col" style="max-height: 85vh;">
+            <div class="p-4 border-b border-border-light dark:border-border-dark flex items-center justify-between">
+                <div class="text-lg font-semibold">{{ _('Add Members') }}</div>
+                <button type="button" onclick="closeAddMembersModal()" class="px-2 py-1 text-sm hover:bg-background-light dark:hover:bg-background-dark rounded">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="p-4 border-b border-border-light dark:border-border-dark">
+                <input type="text" id="addMembersSearch" oninput="filterAddMembersList()" placeholder="{{ _('Search users...') }}" class="form-input w-full">
+            </div>
+            <div id="addMembersList" class="flex-1 overflow-y-auto p-2" style="min-height: 120px;"></div>
+            <p id="addMembersError" class="hidden text-sm text-rose-600 dark:text-rose-400 px-4"></p>
+            <div class="flex justify-end gap-2 p-4 border-t border-border-light dark:border-border-dark">
+                <button type="button" onclick="closeAddMembersModal()" class="px-4 py-2 rounded-lg border border-border-light dark:border-border-dark hover:bg-background-light dark:hover:bg-background-dark">{{ _('Cancel') }}</button>
+                <button type="button" id="addMembersSubmitBtn" onclick="submitAddMembers()" class="bg-primary text-white px-4 py-2 rounded-lg hover:bg-primary-dark transition-colors">
+                    <i class="fas fa-user-plus mr-1"></i>{{ _('Add selected') }}
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
 
 <script nonce="{{ csp_nonce() }}">
 // Auto-scroll to bottom on load
@@ -139,50 +169,176 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
-// WebSocket for real-time messages
-if (typeof io !== 'undefined') {
-    const socket = io();
-    
-    socket.on('connect', function() {
-        socket.emit('join_channel', { channel_id: {{ channel.id }} });
-    });
-    
-    socket.on('new_message', function(data) {
-        if (data.channel_id === {{ channel.id }}) {
-            // Reload messages or append new message
-            location.reload();
+// ---- @mention autocomplete (WhatsApp-group-style tagging) ----
+const MENTIONABLE_USERS = {{ mentionable_users|tojson }};
+
+document.addEventListener('DOMContentLoaded', function() {
+    initMentionAutocomplete(document.getElementById('messageInput'), document.getElementById('mentionDropdown'), MENTIONABLE_USERS);
+});
+
+function initMentionAutocomplete(input, dropdown, users) {
+    if (!input || !dropdown || !users.length) return;
+    let activeIndex = -1;
+    let currentMatches = [];
+    let mentionStart = -1; // index of '@' within input.value
+
+    function closeDropdown() {
+        dropdown.classList.add('hidden');
+        dropdown.innerHTML = '';
+        activeIndex = -1;
+        currentMatches = [];
+        mentionStart = -1;
+    }
+
+    function renderDropdown() {
+        dropdown.innerHTML = currentMatches.map((u, i) => `
+            <button type="button" data-index="${i}" class="w-full text-left px-3 py-1.5 text-sm hover:bg-background-light dark:hover:bg-background-dark ${i === activeIndex ? 'bg-background-light dark:bg-background-dark' : ''}">
+                <span class="font-medium">${escapeHtmlChannel(u.display_name)}</span>
+                <span class="text-text-muted-light dark:text-text-muted-dark ml-1">@${escapeHtmlChannel(u.username)}</span>
+            </button>
+        `).join('');
+        dropdown.classList.remove('hidden');
+        dropdown.querySelectorAll('button[data-index]').forEach(btn => {
+            // mousedown (not click) fires before the textarea's blur, so focus/selection survive
+            btn.addEventListener('mousedown', function(e) {
+                e.preventDefault();
+                selectMention(parseInt(btn.getAttribute('data-index'), 10));
+            });
+        });
+    }
+
+    function selectMention(index) {
+        const user = currentMatches[index];
+        if (!user || mentionStart === -1) return;
+        const value = input.value;
+        const cursor = input.selectionStart;
+        const before = value.slice(0, mentionStart);
+        const after = value.slice(cursor);
+        const insertion = '@' + user.username + ' ';
+        input.value = before + insertion + after;
+        const newCursor = before.length + insertion.length;
+        input.setSelectionRange(newCursor, newCursor);
+        input.focus();
+        closeDropdown();
+    }
+
+    function updateMentionState() {
+        const cursor = input.selectionStart;
+        const textBeforeCursor = input.value.slice(0, cursor);
+        const match = textBeforeCursor.match(/(^|\s)@(\w*)$/);
+        if (!match) {
+            closeDropdown();
+            return;
         }
+        const query = match[2].toLowerCase();
+        mentionStart = cursor - match[2].length - 1;
+        currentMatches = users.filter(u =>
+            u.username.toLowerCase().includes(query) || (u.display_name || '').toLowerCase().includes(query)
+        ).slice(0, 8);
+        if (currentMatches.length === 0) {
+            closeDropdown();
+            return;
+        }
+        activeIndex = 0;
+        renderDropdown();
+    }
+
+    input.addEventListener('input', updateMentionState);
+    input.addEventListener('click', updateMentionState);
+    input.addEventListener('keydown', function(e) {
+        if (dropdown.classList.contains('hidden')) return;
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            activeIndex = Math.min(activeIndex + 1, currentMatches.length - 1);
+            renderDropdown();
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            activeIndex = Math.max(activeIndex - 1, 0);
+            renderDropdown();
+        } else if (e.key === 'Enter' || e.key === 'Tab') {
+            if (activeIndex >= 0) {
+                e.preventDefault();
+                selectMention(activeIndex);
+            }
+        } else if (e.key === 'Escape') {
+            closeDropdown();
+        }
+    });
+    input.addEventListener('blur', function() {
+        // Delay so a mousedown-triggered selection still registers before closing
+        setTimeout(closeDropdown, 150);
     });
 }
 
-// Form submission
-document.getElementById('messageForm').addEventListener('submit', function(e) {
-    e.preventDefault();
-    const form = this;
-    const formData = new FormData(form);
-    
-    fetch(form.action, {
-        method: 'POST',
-        body: formData,
-        headers: {
-            'X-Requested-With': 'XMLHttpRequest'
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            form.reset();
-            // Reload messages
-            location.reload();
-        } else {
-            alert(data.error || 'Failed to send message');
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        alert('Failed to send message');
+// WebSocket for real-time messages. Delivery uses the `user_{id}` room every
+// authenticated page already joins on connect (see base.html), so there's no
+// separate per-channel join step here.
+function escapeHtmlChannel(text) {
+    const div = document.createElement('div');
+    div.textContent = text == null ? '' : text;
+    return div.innerHTML;
+}
+
+// Mirrors the `highlight_mentions` Jinja filter (app/utils/template_filters.py)
+// and app.models.team_chat.ChatMessage.parse_mentions's `@(\w+)` pattern.
+function highlightMentionsChannel(text) {
+    return escapeHtmlChannel(text).replace(/(^|\s)@(\w+)/g, '$1<span class="chat-mention">@$2</span>');
+}
+
+function formatChannelMessageTime(isoString) {
+    const date = new Date(isoString);
+    return window.formatUserTime
+        ? window.formatUserTime(date)
+        : date.toLocaleTimeString([], window.getUserTimeLocaleOptions ? window.getUserTimeLocaleOptions() : { hour: '2-digit', minute: '2-digit' });
+}
+
+function appendChannelMessage(message) {
+    if (!message || message.channel_id !== {{ channel.id }}) return;
+    if (document.querySelector(`[data-message-id="${message.id}"]`)) return; // already rendered
+
+    const container = document.getElementById('messagesContainer');
+    if (!container) return;
+
+    // message.attachment_url is an internal storage path, not a browsable URL
+    // (see download_attachment()) — always link through the download route.
+    const attachmentHtml = (message.attachment_url && message.attachment_filename)
+        ? `<div class="mt-2 space-y-1"><a href="/chat/channels/{{ channel.id }}/messages/${message.id}/attachments/download" class="text-sm text-primary hover:underline"><i class="fas fa-paperclip mr-1"></i>${escapeHtmlChannel(message.attachment_filename)}</a></div>`
+        : '';
+
+    const el = document.createElement('div');
+    el.className = 'flex items-start gap-3';
+    el.setAttribute('data-message-id', message.id);
+    el.innerHTML = `
+        <div class="flex-shrink-0">
+            <div class="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
+                <i class="fas fa-user text-primary"></i>
+            </div>
+        </div>
+        <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 mb-1">
+                <span class="font-semibold text-text-light dark:text-text-dark">${escapeHtmlChannel(message.username || 'Unknown')}</span>
+                <span class="text-xs text-text-muted-light dark:text-text-muted-dark">${formatChannelMessageTime(message.created_at)}</span>
+            </div>
+            <div class="text-text-light dark:text-text-dark whitespace-pre-wrap">${highlightMentionsChannel(message.message)}</div>
+            ${attachmentHtml}
+        </div>
+    `;
+    container.appendChild(el);
+    container.scrollTop = container.scrollHeight;
+}
+
+if (typeof io !== 'undefined') {
+    const socket = io();
+    // Explicitly (re)join this connection's own room on every connect/reconnect;
+    // don't assume it shares a connection (and thus room membership) with other
+    // inline scripts on the page (see base.html's mention-notification socket).
+    socket.on('connect', function() {
+        socket.emit('join_user_room', { user_id: {{ current_user.id }} });
     });
-});
+    socket.on('new_message', function(data) {
+        appendChannelMessage(data);
+    });
+}
 
 // Emoji picker
 let selectedEmoji = null;
@@ -364,19 +520,28 @@ function removeAttachment() {
     if (indicator) indicator.remove();
 }
 
-// Update message form submission to include attachments
-const originalSubmit = document.getElementById('messageForm').onsubmit;
+// Message form submission (includes attachment data when present). Appends the
+// sent message straight to the DOM instead of reloading the page; the socket
+// `new_message` handler above will skip it as a duplicate since it's already
+// rendered (matched by data-message-id).
 document.getElementById('messageForm').addEventListener('submit', function(e) {
     e.preventDefault();
     const form = this;
     const formData = new FormData(form);
-    
+
     // Add attachment data if any
     if (pendingAttachments.length > 0) {
         formData.append('attachment_data', JSON.stringify(pendingAttachments[0]));
         formData.append('message_type', 'file');
     }
-    
+
+    // interactions.js's sitewide form-submit listener disables the submit button
+    // (adds btn-loading) on every submit, expecting a normal page navigation to
+    // reset it. This form is handled via fetch() instead (no navigation), so it
+    // must be re-enabled manually once the request settles or the button stays
+    // disabled forever, silently blocking every message after the first.
+    const submitBtn = form.querySelector('button[type="submit"]');
+
     fetch(form.action, {
         method: 'POST',
         body: formData,
@@ -391,7 +556,7 @@ document.getElementById('messageForm').addEventListener('submit', function(e) {
             pendingAttachments = [];
             const indicator = document.getElementById('attachmentIndicator');
             if (indicator) indicator.remove();
-            location.reload();
+            if (data.message) appendChannelMessage(data.message);
         } else {
             alert(data.error || 'Failed to send message');
         }
@@ -399,8 +564,162 @@ document.getElementById('messageForm').addEventListener('submit', function(e) {
     .catch(error => {
         console.error('Error:', error);
         alert('Failed to send message');
-    });
+    })
+    .finally(() => window.TimeTrackerUI?.removeLoadingState(submitBtn));
 });
+
+{% if can_manage_members %}
+// ---- Add / remove channel members ----
+const channelId = {{ channel.id }};
+let addMembersCandidates = [];
+let selectedAddMemberIds = new Set();
+
+function getCsrfHeader() {
+    return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+}
+
+function currentMemberIds() {
+    return new Set(
+        Array.from(document.querySelectorAll('#channelMembersList [data-member-user-id]'))
+            .map(el => parseInt(el.getAttribute('data-member-user-id'), 10))
+    );
+}
+
+function showAddMembersModal() {
+    const modal = document.getElementById('addMembersModal');
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    selectedAddMemberIds = new Set();
+    const errorEl = document.getElementById('addMembersError');
+    if (errorEl) errorEl.classList.add('hidden');
+    const searchInput = document.getElementById('addMembersSearch');
+    if (searchInput) searchInput.value = '';
+
+    const listEl = document.getElementById('addMembersList');
+    if (listEl) listEl.innerHTML = '<div class="text-center py-4 text-text-muted-light dark:text-text-muted-dark"><i class="fas fa-spinner fa-spin"></i></div>';
+
+    fetch('/api/chat/users', { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(response => response.json())
+        .then(data => {
+            const existing = currentMemberIds();
+            addMembersCandidates = (data.users || []).filter(u => !existing.has(u.id));
+            renderAddMembersList(addMembersCandidates);
+        })
+        .catch(() => {
+            if (listEl) listEl.innerHTML = '<div class="text-center py-4 text-rose-600 dark:text-rose-400 text-sm">{{ _("Failed to load users") }}</div>';
+        });
+}
+
+function closeAddMembersModal() {
+    const modal = document.getElementById('addMembersModal');
+    if (modal) modal.classList.add('hidden');
+}
+
+function renderAddMembersList(users) {
+    const listEl = document.getElementById('addMembersList');
+    if (!listEl) return;
+    if (users.length === 0) {
+        listEl.innerHTML = '<div class="text-center py-4 text-text-muted-light dark:text-text-muted-dark text-sm">{{ _("No users found") }}</div>';
+        return;
+    }
+    listEl.innerHTML = users.map(user => {
+        const displayName = user.display_name || user.username || 'Unknown';
+        const checked = selectedAddMemberIds.has(user.id) ? 'checked' : '';
+        return `
+            <label class="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-background-light dark:hover:bg-background-dark cursor-pointer">
+                <input type="checkbox" class="form-checkbox" data-user-id="${user.id}" ${checked} onchange="toggleAddMemberSelection(${user.id}, this.checked)">
+                <span class="text-sm">${displayName}</span>
+            </label>
+        `;
+    }).join('');
+}
+
+function toggleAddMemberSelection(userId, checked) {
+    if (checked) selectedAddMemberIds.add(userId);
+    else selectedAddMemberIds.delete(userId);
+}
+
+function filterAddMembersList() {
+    const term = (document.getElementById('addMembersSearch')?.value || '').toLowerCase().trim();
+    if (!term) {
+        renderAddMembersList(addMembersCandidates);
+        return;
+    }
+    const filtered = addMembersCandidates.filter(u => {
+        const name = (u.display_name || u.username || '').toLowerCase();
+        return name.includes(term);
+    });
+    renderAddMembersList(filtered);
+}
+
+function submitAddMembers() {
+    const errorEl = document.getElementById('addMembersError');
+    const submitBtn = document.getElementById('addMembersSubmitBtn');
+    if (selectedAddMemberIds.size === 0) {
+        if (errorEl) {
+            errorEl.textContent = '{{ _("Select at least one user") }}';
+            errorEl.classList.remove('hidden');
+        }
+        return;
+    }
+    if (errorEl) errorEl.classList.add('hidden');
+    if (submitBtn) submitBtn.disabled = true;
+
+    fetch(`/api/chat/channels/${channelId}/members`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-CSRFToken': getCsrfHeader()
+        },
+        body: JSON.stringify({ user_ids: Array.from(selectedAddMemberIds) })
+    })
+    .then(response => response.json().then(data => ({ ok: response.ok, data })))
+    .then(({ ok, data }) => {
+        if (!ok || !data.success) {
+            throw new Error(data.error || '{{ _("Failed to add members") }}');
+        }
+        location.reload();
+    })
+    .catch(error => {
+        if (errorEl) {
+            errorEl.textContent = error.message;
+            errorEl.classList.remove('hidden');
+        }
+    })
+    .finally(() => {
+        if (submitBtn) submitBtn.disabled = false;
+    });
+}
+{% endif %}
+
+function removeChannelMember(userId) {
+    const isSelf = userId === {{ current_user.id }};
+    const confirmMsg = isSelf ? '{{ _("Leave this channel?") }}' : '{{ _("Remove this member from the channel?") }}';
+    if (!confirm(confirmMsg)) return;
+
+    fetch(`/api/chat/channels/{{ channel.id }}/members/${userId}`, {
+        method: 'DELETE',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+        }
+    })
+    .then(response => response.json().then(data => ({ ok: response.ok, data })))
+    .then(({ ok, data }) => {
+        if (!ok || !data.success) {
+            throw new Error(data.error || '{{ _("Failed to remove member") }}');
+        }
+        if (isSelf) {
+            window.location.href = '{{ url_for("team_chat.chat_index") }}';
+        } else {
+            location.reload();
+        }
+    })
+    .catch(error => {
+        alert(error.message);
+    });
+}
 </script>
 {% endblock %}
 

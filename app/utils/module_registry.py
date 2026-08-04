@@ -427,6 +427,45 @@ class ModuleRegistry:
             )
         )
 
+        cls.register(
+            ModuleDefinition(
+                id="my_productivity",
+                name="My Productivity",
+                description="Personal productivity dashboard",
+                category=ModuleCategory.TIME_TRACKING,
+                blueprint_name="main",
+                default_enabled=True,
+                icon="fa-chart-line",
+                order=17,
+            )
+        )
+
+        cls.register(
+            ModuleDefinition(
+                id="time_entries_nav",
+                name="Time Entries",
+                description="Time entries list/overview nav item",
+                category=ModuleCategory.TIME_TRACKING,
+                blueprint_name="timer",
+                default_enabled=True,
+                icon="fa-list-alt",
+                order=18,
+            )
+        )
+
+        cls.register(
+            ModuleDefinition(
+                id="workforce",
+                name="Workforce",
+                description="Workforce overview dashboard",
+                category=ModuleCategory.PROJECT_MANAGEMENT,
+                blueprint_name="workforce",
+                default_enabled=True,
+                icon="fa-user-clock",
+                order=17,
+            )
+        )
+
         # CRM Features
         cls.register(
             ModuleDefinition(
@@ -673,6 +712,71 @@ class ModuleRegistry:
                 default_enabled=True,
                 icon="fa-chart-line",
                 order=60,
+            )
+        )
+
+        # Individual dashboard widgets (main.dashboard). Each just toggles a
+        # section of the dashboard template — no dedicated blueprint of their
+        # own, so blueprint_name is a nominal label only.
+        cls.register(
+            ModuleDefinition(
+                id="dashboard_recent_entries",
+                name="Recent Entries widget",
+                description="Recent time entries list on the Dashboard",
+                category=ModuleCategory.ANALYTICS,
+                blueprint_name="main",
+                default_enabled=True,
+                icon="fa-history",
+                order=61,
+            )
+        )
+        cls.register(
+            ModuleDefinition(
+                id="dashboard_time_by_project",
+                name="Time by Project widget",
+                description="'Time by project (last 7 days)' chart on the Dashboard",
+                category=ModuleCategory.ANALYTICS,
+                blueprint_name="main",
+                default_enabled=True,
+                icon="fa-chart-pie",
+                order=62,
+            )
+        )
+        cls.register(
+            ModuleDefinition(
+                id="dashboard_top_projects",
+                name="Top Projects widget",
+                description="'Top Projects (30 days)' list on the Dashboard",
+                category=ModuleCategory.ANALYTICS,
+                blueprint_name="main",
+                default_enabled=True,
+                icon="fa-chart-line",
+                order=63,
+            )
+        )
+        cls.register(
+            ModuleDefinition(
+                id="dashboard_recent_activity",
+                name="Recent Activity widget",
+                description="'Recent Activity' timeline on the Dashboard",
+                category=ModuleCategory.ANALYTICS,
+                blueprint_name="main",
+                default_enabled=True,
+                icon="fa-stream",
+                order=64,
+            )
+        )
+        cls.register(
+            ModuleDefinition(
+                id="dashboard_jira_backlog",
+                name="Jira Sprint Backlog widget",
+                description="Preview of the active Jira sprint backlog on the Dashboard, below Trending Issue",
+                category=ModuleCategory.ANALYTICS,
+                blueprint_name="main",
+                default_enabled=True,
+                dependencies=["integrations"],
+                icon="fa-tasks",
+                order=65,
             )
         )
 

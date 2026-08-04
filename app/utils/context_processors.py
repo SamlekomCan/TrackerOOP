@@ -173,7 +173,7 @@ def register_context_processors(app):
                 all_departments = []
 
         return {
-            "app_name": "Time Tracker",
+            "app_name": "NDSTracker",
             "app_version": version_value,
             "is_admin_user": is_admin_user,
             "all_departments": all_departments,
