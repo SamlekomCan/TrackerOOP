@@ -639,8 +639,8 @@ class QuickBooksConnector(BaseConnector):
                     "type": "select",
                     "label": "Sync Direction",
                     "options": [
-                        {"value": "quickbooks_to_timetracker", "label": "QuickBooks → TimeTracker (Import only)"},
-                        {"value": "timetracker_to_quickbooks", "label": "TimeTracker → QuickBooks (Export only)"},
+                        {"value": "quickbooks_to_timetracker", "label": "QuickBooks → NDSTracker (Import only)"},
+                        {"value": "timetracker_to_quickbooks", "label": "NDSTracker → QuickBooks (Export only)"},
                         {"value": "bidirectional", "label": "Bidirectional (Two-way sync)"},
                     ],
                     "default": "timetracker_to_quickbooks",

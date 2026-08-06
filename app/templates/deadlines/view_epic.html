@@ -43,11 +43,14 @@
             <tr class="text-left text-sm">
               <th scope="col" class="px-4 py-3">{{ _('Name') }}</th>
               <th scope="col" class="px-4 py-3 w-28">{{ _('Status') }}</th>
+              <th scope="col" class="px-4 py-3">{{ _('Follow-up') }}</th>
               <th scope="col" class="px-4 py-3 w-24">{{ _('Actions') }}</th>
             </tr>
           </thead>
           <tbody role="rowgroup">
             {% for story in stories %}
+            {% set history = followup_history.get(story.id, []) %}
+            {% set latest = history[0] if history else None %}
             <tr role="row">
               <td class="px-4 py-3">
                 <div class="font-medium">{{ story.name }}</div>
@@ -56,13 +59,56 @@
               <td class="px-4 py-3">
                 <span class="chip {{ 'chip-success' if story.status == 'done' else 'chip-neutral' }}">{{ story.status|capitalize }}</span>
               </td>
+              <td class="px-4 py-3 max-w-xs">
+                {% if latest %}
+                <div class="flex items-center gap-2 text-xs text-text-muted-light dark:text-text-muted-dark">
+                  <span>{{ latest.date|local_date }}</span>
+                  {% if latest.resolved %}
+                  <span class="chip chip-success">{{ _('Closed') }}</span>
+                  {% elif latest.next_due_date %}
+                  <span class="chip chip-neutral">{{ _('Next') }} {{ latest.next_due_date|format_date }}</span>
+                  {% endif %}
+                </div>
+                <div class="text-sm truncate" title="{{ latest.note or '' }}">{{ latest.note or '—' }}</div>
+                {% if history|length > 1 %}
+                <button type="button" onclick="document.getElementById('followup-history-{{ story.id }}').classList.toggle('hidden')" class="text-xs text-primary hover:underline mt-1">
+                  <i class="fas fa-clock-rotate-left"></i> {{ _('View history') }} ({{ history|length }})
+                </button>
+                {% endif %}
+                {% else %}
+                <span class="text-xs text-text-muted-light dark:text-text-muted-dark">{{ _('No follow-up yet') }}</span>
+                {% endif %}
+              </td>
               <td class="px-4 py-3">
                 <a href="{{ url_for('deadlines.edit_story', story_id=story.id) }}" class="text-primary hover:underline">{{ _('Edit') }}</a>
               </td>
             </tr>
+            {% if history|length > 1 %}
+            <tr id="followup-history-{{ story.id }}" class="hidden bg-background-light dark:bg-background-dark">
+              <td colspan="4" class="px-4 py-3">
+                <div class="text-xs font-semibold uppercase text-text-muted-light dark:text-text-muted-dark mb-2">{{ _('Follow-up history') }} &mdash; {{ _('most recent first') }}</div>
+                <ul class="space-y-2">
+                  {% for entry in history %}
+                  <li class="text-sm border-l-2 {{ 'border-emerald-500' if entry.resolved else 'border-primary' }} pl-3">
+                    <div class="flex flex-wrap items-center gap-2 text-xs text-text-muted-light dark:text-text-muted-dark">
+                      <span>{{ entry.date|local_datetime_short }}</span>
+                      {% if entry.author %}<span>&middot; {{ entry.author.display_name }}</span>{% endif %}
+                      {% if entry.resolved %}
+                      <span class="chip chip-success">{{ _('Closed') }}</span>
+                      {% elif entry.next_due_date %}
+                      <span class="chip chip-neutral">{{ _('Rescheduled to') }} {{ entry.next_due_date|format_date }}</span>
+                      {% endif %}
+                    </div>
+                    <div>{{ entry.note or '—' }}</div>
+                  </li>
+                  {% endfor %}
+                </ul>
+              </td>
+            </tr>
+            {% endif %}
             {% else %}
             <tr>
-              <td colspan="3" class="px-4 py-6 text-center text-text-muted-light dark:text-text-muted-dark">{{ _('No stories yet.') }}</td>
+              <td colspan="4" class="px-4 py-6 text-center text-text-muted-light dark:text-text-muted-dark">{{ _('No stories yet.') }}</td>
             </tr>
             {% endfor %}
           </tbody>

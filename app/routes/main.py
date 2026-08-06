@@ -32,6 +32,7 @@ from app.models import (
     WeeklyTimeGoal,
 )
 from app.models.time_entry import local_now
+from app.utils.module_helpers import is_module_enabled
 from app.utils.posthog_segmentation import update_user_segments_if_needed
 from app.utils.timezone import now_in_app_timezone
 
@@ -103,6 +104,18 @@ def dashboard():
         .limit(5)
         .all()
     )
+
+    # Jira sprint backlog preview (below Trending Issue). Best-effort: the Jira
+    # host is often only reachable from inside the corporate network/VPN, so
+    # this must never fail the whole dashboard render — any error just shows
+    # as a small "couldn't load" state in that one widget.
+    jira_widget = None
+    jira_boards = []
+    if is_module_enabled("dashboard_jira_backlog"):
+        from app.utils.jira_widget import get_jira_boards_for_widget, get_jira_widget_data
+
+        jira_widget = get_jira_widget_data(board_name=session.get("jira_dashboard_board"))
+        jira_boards = get_jira_boards_for_widget()
 
     # Get active projects and clients for timer dropdown (scoped for subcontractors)
     from app.utils.scope_filter import apply_client_scope_to_model, apply_project_scope_to_model
@@ -304,6 +317,8 @@ def dashboard():
         "today": now_in_app_timezone().date(),
         "epics": epics,
         "trending_issues": trending_issues,
+        "jira_widget": jira_widget,
+        "jira_boards": jira_boards,
     }
 
     return render_template("main/dashboard.html", **template_data)

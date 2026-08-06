@@ -360,8 +360,8 @@ class GitLabConnector(BaseConnector):
                     "type": "select",
                     "label": "Sync Direction",
                     "options": [
-                        {"value": "gitlab_to_timetracker", "label": "GitLab → TimeTracker (Import only)"},
-                        {"value": "timetracker_to_gitlab", "label": "TimeTracker → GitLab (Export only)"},
+                        {"value": "gitlab_to_timetracker", "label": "GitLab → NDSTracker (Import only)"},
+                        {"value": "timetracker_to_gitlab", "label": "NDSTracker → GitLab (Export only)"},
                         {"value": "bidirectional", "label": "Bidirectional (Two-way sync)"},
                     ],
                     "default": "gitlab_to_timetracker",

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ _('Welcome') }} - TimeTracker</title>
+    <title>{{ _('Welcome') }} - NDSTracker</title>
     <!-- Favicon -->
     <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/timetracker-logo.svg') }}">
     <link rel="alternate icon" href="{{ url_for('static', filename='images/timetracker-logo.svg') }}">
@@ -30,8 +30,8 @@
             <!-- Left side - Branding -->
             <div class="hidden md:flex flex-col items-center justify-center p-10 bg-background-light dark:bg-background-dark border-r border-border-light dark:border-border-dark">
                 <div class="text-center">
-                    <img src="{{ url_for('static', filename='images/timetracker-logo.svg') }}" alt="logo" class="w-24 h-24 mx-auto">
-                    <h1 class="text-3xl font-bold mt-4 text-primary">TimeTracker</h1>
+                    <img src="{{ url_for('static', filename='images/timetracker-logo.svg') }}" alt="logo" class="w-32 h-32 mx-auto">
+                    <h1 class="text-2xl font-bold mt-4 text-primary">NDSTracker</h1>
                     <p class="mt-2 text-text-muted-light dark:text-text-muted-dark">{{ _('Track time. Stay organized.') }}</p>
                     <!-- Privacy Principles -->
                     <div class="mt-8 space-y-3 text-left">
@@ -67,8 +67,8 @@
             <!-- Right side - Wizard -->
             <div class="p-4 sm:p-8 overflow-y-auto max-h-[90vh]">
                 <div class="flex items-center gap-3 mb-4 md:hidden">
-                    <img src="{{ url_for('static', filename='images/timetracker-logo.svg') }}" alt="TimeTracker Logo" class="w-10 h-10">
-                    <span class="text-xl font-bold text-primary">TimeTracker</span>
+                    <img src="{{ url_for('static', filename='images/timetracker-logo.svg') }}" alt="NDSTracker Logo" class="w-14 h-14">
+                    <span class="text-base font-bold text-primary">NDSTracker</span>
                 </div>
                 <p class="text-sm font-medium text-text-muted-light dark:text-text-muted-dark mb-4" id="wizard-progress-label">{{ _('Step 1 of 7') }}</p>
                 <div class="flex gap-1 mb-6" aria-hidden="true">
@@ -86,21 +86,21 @@
 
                     <!-- Step 1: Welcome -->
                     <div class="wizard-step" data-step="1" aria-current="step">
-                        <h2 class="text-2xl font-bold tracking-tight">{{ _('Welcome to TimeTracker') }}</h2>
+                        <h2 class="text-2xl font-bold tracking-tight">{{ _('Welcome to NDSTracker') }}</h2>
                         <p class="mt-2 text-sm text-text-muted-light dark:text-text-muted-dark">{{ _("Let's get you set up in just a moment") }}</p>
                         <div class="mt-6 bg-primary/10 border border-primary/20 rounded-lg p-4">
-                            <h3 class="text-sm font-semibold text-primary mb-2">🎉 {{ _('Thank you for choosing TimeTracker!') }}</h3>
+                            <h3 class="text-sm font-semibold text-primary mb-2">🎉 {{ _('Thank you for choosing NDSTracker!') }}</h3>
                             <p class="text-sm text-text-muted-light dark:text-text-muted-dark">
                                 {{ _('Your data stays on your server, and you have complete control.') }}
                             </p>
                         </div>
                     </div>
 
-                    <!-- Step 2: What will you use TimeTracker for? -->
+                    <!-- Step 2: What will you use NDSTracker for? -->
                     <div class="wizard-step hidden" data-step="2">
-                        <h2 class="text-xl font-bold tracking-tight">{{ _('What will you use TimeTracker for?') }}</h2>
+                        <h2 class="text-xl font-bold tracking-tight">{{ _('What will you use NDSTracker for?') }}</h2>
                         <p class="mt-2 text-sm text-text-muted-light dark:text-text-muted-dark">
-                            {{ _('TimeTracker ships with a lot of modules. Pick the closest match and we will switch off the ones you are unlikely to need, so the navigation stays manageable. You can change this any time in Admin → Modules.') }}
+                            {{ _('NDSTracker ships with a lot of modules. Pick the closest match and we will switch off the ones you are unlikely to need, so the navigation stays manageable. You can change this any time in Admin → Modules.') }}
                         </p>
                         <fieldset class="mt-4 space-y-3">
                             <legend class="sr-only">{{ _('Module preset') }}</legend>
@@ -263,14 +263,14 @@
                     <!-- Step 7: Privacy & finish -->
                     <div class="wizard-step hidden" data-step="7">
                         <h2 class="text-xl font-bold tracking-tight">{{ _('Privacy & finish') }}</h2>
-                        <p class="mt-1 text-sm text-text-muted-light dark:text-text-muted-dark">{{ _('Choose whether to help improve TimeTracker with anonymous usage data.') }}</p>
+                        <p class="mt-1 text-sm text-text-muted-light dark:text-text-muted-dark">{{ _('Choose whether to help improve NDSTracker with anonymous usage data.') }}</p>
                         <div class="mt-4 bg-background-light dark:bg-gray-700 border border-border-light dark:border-border-dark rounded-lg p-4">
                             <div class="mb-3">
                                 <label class="flex items-start cursor-pointer">
                                     <input type="checkbox" name="telemetry_enabled" class="mt-1 h-4 w-4 text-primary border-border-light dark:border-border-dark rounded focus:ring-primary">
                                     <span class="ml-3 text-sm">
                                         <span class="font-medium">{{ _('Enable anonymous telemetry') }}</span>
-                                        <span class="block text-text-muted-light dark:text-text-muted-dark mt-1">{{ _('Help us understand usage patterns to improve TimeTracker') }}</span>
+                                        <span class="block text-text-muted-light dark:text-text-muted-dark mt-1">{{ _('Help us understand usage patterns to improve NDSTracker') }}</span>
                                     </span>
                                 </label>
                             </div>
@@ -298,7 +298,7 @@
                             </details>
                         </div>
                         <div class="mt-4 text-xs text-text-muted-light dark:text-text-muted-dark">
-                            <p>{{ _('By continuing, you agree to use TimeTracker under the') }} <a href="https://www.gnu.org/licenses/gpl-3.0.html" class="text-primary hover:underline" target="_blank" rel="noopener">{{ _('GPL-3.0 License') }}</a></p>
+                            <p>{{ _('By continuing, you agree to use NDSTracker under the') }} <a href="https://www.gnu.org/licenses/gpl-3.0.html" class="text-primary hover:underline" target="_blank" rel="noopener">{{ _('GPL-3.0 License') }}</a></p>
                         </div>
                     </div>
 

@@ -128,6 +128,7 @@
         </div>
 
         <!-- Recent Entries -->
+        {% if is_module_enabled('dashboard_recent_entries') %}
         <div class="bg-card-light dark:bg-card-dark p-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 dashboard-widget animated-card">
             <div class="flex items-center justify-between mb-4">
                 <div class="flex items-center gap-3">
@@ -213,6 +214,7 @@
                 </table>
             </div>
         </div>
+        {% endif %}
 
         <!-- Deadline -->
         <div class="bg-card-light dark:bg-card-dark p-6 rounded-lg shadow-md dashboard-widget animated-card">
@@ -318,6 +320,55 @@
                 </table>
             </div>
         </div>
+
+        <!-- Jira Sprint Backlog -->
+        {% if jira_widget is not none %}
+        <div class="bg-card-light dark:bg-card-dark p-6 rounded-lg shadow-md dashboard-widget animated-card">
+            <div class="flex items-center justify-between mb-3 gap-3">
+                <h2 class="text-lg font-semibold whitespace-nowrap"><i class="fas fa-tasks text-blue-600 mr-2"></i>{{ _('Jira Sprint Backlog') }}</h2>
+                {% if jira_boards %}
+                <select id="jiraWidgetBoardSelect" class="flex-1 max-w-[200px] px-3 py-1.5 text-sm border border-border-light dark:border-border-dark rounded-lg bg-card-light dark:bg-card-dark">
+                    {% set current_board_name = (jira_widget.board or {}).get('name', '') %}
+                    {% for b in jira_boards %}
+                    <option value="{{ b.name }}" {% if b.name == current_board_name %}selected{% endif %}>{{ b.name }}</option>
+                    {% endfor %}
+                </select>
+                {% endif %}
+                <a id="jiraWidgetViewAll" href="{{ url_for('integrations.jira_sprint_backlog') }}{% if jira_widget.board %}?board={{ jira_widget.board.name|urlencode }}{% endif %}"
+                   class="text-sm text-primary hover:underline whitespace-nowrap {% if not (jira_widget.success and jira_widget.sprint) %}hidden{% endif %}">{{ _('View all') }} &rarr;</a>
+            </div>
+
+            <div id="jiraWidgetContent">
+                {% include "integrations/_jira_widget_content.html" %}
+            </div>
+        </div>
+
+        {% if jira_boards %}
+        <script nonce="{{ csp_nonce() }}">
+        (function() {
+            var select = document.getElementById('jiraWidgetBoardSelect');
+            var content = document.getElementById('jiraWidgetContent');
+            var viewAll = document.getElementById('jiraWidgetViewAll');
+            var widgetUrl = {{ url_for('integrations.jira_dashboard_widget')|tojson }};
+            var backlogUrl = {{ url_for('integrations.jira_sprint_backlog')|tojson }};
+
+            select.addEventListener('change', function() {
+                var name = select.value;
+                content.style.opacity = '0.5';
+                fetch(widgetUrl + '?board=' + encodeURIComponent(name))
+                    .then(function(r) { return r.text(); })
+                    .then(function(html) {
+                        content.innerHTML = html;
+                        content.style.opacity = '1';
+                        viewAll.href = backlogUrl + '?board=' + encodeURIComponent(name);
+                        viewAll.classList.remove('hidden');
+                    })
+                    .catch(function() { content.style.opacity = '1'; });
+            });
+        })();
+        </script>
+        {% endif %}
+        {% endif %}
     </div>
 
     <!-- Right Column: Real Insights -->
@@ -386,6 +437,7 @@
         {% endif %}
 
         <!-- Time by project (last 7 days) chart -->
+        {% if is_module_enabled('dashboard_time_by_project') %}
         <div class="bg-card-light dark:bg-card-dark p-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 dashboard-widget animated-card">
             <div class="flex items-center justify-between mb-4">
                 <div class="flex items-center gap-3">
@@ -442,7 +494,9 @@
             </div>
             {% endif %}
         </div>
+        {% endif %}
 
+        {% if is_module_enabled('dashboard_top_projects') %}
         <div class="bg-card-light dark:bg-card-dark p-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 dashboard-widget animated-card">
             <div class="flex items-center justify-between mb-6">
                 <div class="flex items-center gap-3">
@@ -492,9 +546,11 @@
                 </div>
             {% endif %}
         </div>
+        {% endif %}
     </div>
 </div>
 
+{% if is_module_enabled('dashboard_recent_activity') %}
 <!-- Secondary row: Activity and Support (below main focus) -->
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
     <!-- Activity Timeline Widget - reduced visual weight -->
@@ -542,6 +598,7 @@
     </div>
 
 </div>
+{% endif %}
     <!-- Delete Entry Confirmation Dialogs -->
     {% for entry in recent_entries %}
     {% if current_user.is_admin or entry.user_id == current_user.id %}
@@ -558,7 +615,7 @@
 
     <!-- Start Timer Modal -->
     <div id="startTimerModal"
-         class="fixed inset-0 z-50 hidden overflow-y-auto"
+         class="fixed inset-0 z-50 hidden"
          aria-hidden="true"
          data-last-timer-context="{{ (last_timer_context|tojson)|e if last_timer_context else '{}' }}"
          data-tasks-api-url="{{ url_for('api.get_project_tasks', project_id=0) }}"
@@ -581,7 +638,8 @@
          data-description-required-msg="{{ _('A description is required when logging time')|e }}"
          data-description-min-msg="{{ _('Description must be at least %(min)s characters', min=getattr(settings, 'time_entry_description_min_length', 20))|e }}">
         <div class="absolute inset-0 bg-black/50" data-overlay></div>
-        <div class="relative max-w-lg mx-auto mt-24 max-h-[90vh] overflow-y-auto bg-card-light dark:bg-card-dark text-text-light dark:text-text-dark rounded-lg shadow-lg" data-modal-content>
+        <div class="relative flex min-h-full items-start sm:items-center justify-center p-4" data-overlay>
+        <div class="relative w-full max-w-lg overflow-y-auto overscroll-contain bg-card-light dark:bg-card-dark text-text-light dark:text-text-dark rounded-lg shadow-lg" style="max-height: 85vh;" data-modal-content>
             <div class="p-4 border-b border-border-light dark:border-border-dark flex items-center justify-between gap-2">
                 <div class="text-lg font-semibold">{{ _('Start Timer') }}</div>
                 <div class="flex items-center gap-2 shrink-0">
@@ -660,6 +718,7 @@
                 </div>
             </form>
         </div>
+        </div>
     </div>
 
     {% set create_task_modal_content %}
@@ -678,7 +737,8 @@
 
     <div id="checkInModal" class="fixed inset-0 z-50 hidden">
         <div class="absolute inset-0 bg-black/50" data-overlay></div>
-        <div class="relative max-w-lg mx-auto mt-24 bg-card-light dark:bg-card-dark text-text-light dark:text-text-dark rounded-lg shadow-lg">
+        <div class="relative flex min-h-full items-start sm:items-center justify-center p-4" data-overlay>
+        <div class="relative w-full max-w-lg overflow-y-auto overscroll-contain bg-card-light dark:bg-card-dark text-text-light dark:text-text-dark rounded-lg shadow-lg" style="max-height: 85vh;">
             <div class="p-4 border-b border-border-light dark:border-border-dark flex items-center justify-between">
                 <div class="text-lg font-semibold">{{ _('Check-In') }}</div>
                 <button type="button" data-close class="px-2 py-1 text-sm hover:bg-background-light dark:hover:bg-background-dark rounded">{{ _('Close') }}</button>
@@ -743,11 +803,13 @@
                 </div>
             </form>
         </div>
+        </div>
     </div>
 
     <div id="checkOutModal" class="fixed inset-0 z-50 hidden">
         <div class="absolute inset-0 bg-black/50" data-overlay></div>
-        <div class="relative max-w-lg mx-auto mt-24 bg-card-light dark:bg-card-dark text-text-light dark:text-text-dark rounded-lg shadow-lg">
+        <div class="relative flex min-h-full items-start sm:items-center justify-center p-4" data-overlay>
+        <div class="relative w-full max-w-lg overflow-y-auto overscroll-contain bg-card-light dark:bg-card-dark text-text-light dark:text-text-dark rounded-lg shadow-lg" style="max-height: 85vh;">
             <div class="p-4 border-b border-border-light dark:border-border-dark flex items-center justify-between">
                 <div class="text-lg font-semibold">{{ _('Check-Out') }}</div>
                 <button type="button" data-close class="px-2 py-1 text-sm hover:bg-background-light dark:hover:bg-background-dark rounded">{{ _('Close') }}</button>
@@ -785,11 +847,13 @@
                 </div>
             </form>
         </div>
+        </div>
     </div>
 
     <div id="updateCheckinModal" class="fixed inset-0 z-50 hidden">
         <div class="absolute inset-0 bg-black/50" data-overlay></div>
-        <div class="relative max-w-lg mx-auto mt-24 bg-card-light dark:bg-card-dark text-text-light dark:text-text-dark rounded-lg shadow-lg">
+        <div class="relative flex min-h-full items-start sm:items-center justify-center p-4" data-overlay>
+        <div class="relative w-full max-w-lg overflow-y-auto overscroll-contain bg-card-light dark:bg-card-dark text-text-light dark:text-text-dark rounded-lg shadow-lg" style="max-height: 85vh;">
             <div class="p-4 border-b border-border-light dark:border-border-dark flex items-center justify-between">
                 <div class="text-lg font-semibold">{{ _('Update Follow-up') }}</div>
                 <button type="button" data-close class="px-2 py-1 text-sm hover:bg-background-light dark:hover:bg-background-dark rounded">{{ _('Close') }}</button>
@@ -817,6 +881,7 @@
                 </div>
             </form>
         </div>
+        </div>
     </div>
 {% endblock %}
 
@@ -824,6 +889,48 @@
 {% block scripts_extra %}
 <script nonce="{{ csp_nonce() }}">
     document.addEventListener('DOMContentLoaded', function() {
+        // Lock background page scroll while any of these modals is open (mobile: prevents
+        // touches on the backdrop from scrolling the dashboard behind the modal).
+        (function initModalScrollLock() {
+            var modalIds = ['startTimerModal', 'checkInModal', 'checkOutModal', 'updateCheckinModal'];
+            var modals = modalIds.map(function(id) { return document.getElementById(id); }).filter(Boolean);
+            if (!modals.length) return;
+            var savedScrollY = 0;
+            var locked = false;
+            function lockScroll() {
+                if (locked) return;
+                locked = true;
+                savedScrollY = window.scrollY || document.documentElement.scrollTop || 0;
+                document.documentElement.classList.add('overflow-hidden');
+                document.body.classList.add('overflow-hidden');
+                document.body.style.position = 'fixed';
+                document.body.style.top = (-savedScrollY) + 'px';
+                document.body.style.left = '0';
+                document.body.style.right = '0';
+                document.body.style.width = '100%';
+            }
+            function unlockScroll() {
+                if (!locked) return;
+                locked = false;
+                document.documentElement.classList.remove('overflow-hidden');
+                document.body.classList.remove('overflow-hidden');
+                document.body.style.position = '';
+                document.body.style.top = '';
+                document.body.style.left = '';
+                document.body.style.right = '';
+                document.body.style.width = '';
+                window.scrollTo(0, savedScrollY);
+            }
+            function syncBodyScrollLock() {
+                var anyOpen = modals.some(function(m) { return !m.classList.contains('hidden'); });
+                if (anyOpen) lockScroll(); else unlockScroll();
+            }
+            modals.forEach(function(m) {
+                new MutationObserver(syncBodyScrollLock).observe(m, { attributes: true, attributeFilter: ['class'] });
+            });
+            syncBodyScrollLock();
+        })();
+
         // Single adjust-time form: buttons set delta and submit
         (function initAdjustTimerForm() {
             var form = document.getElementById('dashboardAdjustTimerForm');

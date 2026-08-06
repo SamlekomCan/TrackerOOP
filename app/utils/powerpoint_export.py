@@ -25,7 +25,7 @@ except ImportError:
     RGBColor = None
 
 
-def create_report_powerpoint(entries, title="TimeTracker Report", filename_prefix="timetracker_report"):
+def create_report_powerpoint(entries, title="NDSTracker Report", filename_prefix="ndstracker_report"):
     """Create PowerPoint presentation from time entries
 
     Args:

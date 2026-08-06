@@ -16,7 +16,7 @@ swaggerui_blueprint = get_swaggerui_blueprint(
     SWAGGER_URL,
     API_URL,
     config={
-        "app_name": "TimeTracker REST API",
+        "app_name": "NDSTracker REST API",
         "defaultModelsExpandDepth": -1,
         "displayRequestDuration": True,
         "docExpansion": "list",
@@ -38,16 +38,16 @@ def openapi_spec():
     spec = {
         "openapi": "3.0.0",
         "info": {
-            "title": "TimeTracker REST API",
+            "title": "NDSTracker REST API",
             "version": app_version,
             "description": """
-# TimeTracker REST API
+# NDSTracker REST API
 
 A comprehensive REST API for time tracking, project management, and reporting.
 
 ## Two HTTP JSON surfaces
 
-TimeTracker exposes two JSON HTTP surfaces. **This OpenAPI document describes only `/api/v1`** (paths are relative to the v1 server URL).
+NDSTracker exposes two JSON HTTP surfaces. **This OpenAPI document describes only `/api/v1`** (paths are relative to the v1 server URL).
 
 1. **`/api/v1` (documented here)** — Primary, versioned **REST API** for integrations (desktop, mobile, automation). Uses **API token** authentication (`Authorization: Bearer` or `X-API-Key`), scoped permissions, and stable JSON contracts.
 
@@ -167,7 +167,7 @@ All timestamps use ISO 8601 format:
 
 Example: `2024-01-15T14:30:00Z`
             """,
-            "contact": {"name": "TimeTracker API Support"},
+            "contact": {"name": "NDSTracker API Support"},
             "license": {"name": "MIT"},
         },
         "servers": [
@@ -340,7 +340,7 @@ Example: `2024-01-15T14:30:00Z`
                 "get": {
                     "tags": ["AI Helper"],
                     "summary": "Preview AI context",
-                    "description": "Return the compact TimeTracker context that would be sent to the AI helper.",
+                    "description": "Return the compact NDSTracker context that would be sent to the AI helper.",
                     "responses": {"200": {"description": "Context preview"}, "401": {"description": "Unauthorized"}},
                 }
             },

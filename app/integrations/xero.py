@@ -417,8 +417,8 @@ class XeroConnector(BaseConnector):
                     "type": "select",
                     "label": "Sync Direction",
                     "options": [
-                        {"value": "xero_to_timetracker", "label": "Xero → TimeTracker (Import only)"},
-                        {"value": "timetracker_to_xero", "label": "TimeTracker → Xero (Export only)"},
+                        {"value": "xero_to_timetracker", "label": "Xero → NDSTracker (Import only)"},
+                        {"value": "timetracker_to_xero", "label": "NDSTracker → Xero (Export only)"},
                         {"value": "bidirectional", "label": "Bidirectional (Two-way sync)"},
                     ],
                     "default": "timetracker_to_xero",

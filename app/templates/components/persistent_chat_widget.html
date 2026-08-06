@@ -21,14 +21,23 @@
                 <h3 class="font-semibold text-text-light dark:text-text-dark">{{ _('Chat') }}</h3>
             </div>
             <div class="flex items-center gap-2">
-                <button 
-                    onclick="openChatUserSelector()" 
+                {% if current_user.is_admin or current_user.is_manager %}
+                <button
+                    onclick="showCreateChannelModal()"
+                    class="p-1.5 hover:bg-background-light dark:hover:bg-background-dark rounded transition-colors"
+                    title="{{ _('Create channel') }}"
+                >
+                    <i class="fas fa-hashtag text-text-muted-light dark:text-text-muted-dark"></i>
+                </button>
+                {% endif %}
+                <button
+                    onclick="openChatUserSelector()"
                     class="p-1.5 hover:bg-background-light dark:hover:bg-background-dark rounded transition-colors"
                     title="{{ _('Start new chat') }}"
                 >
                     <i class="fas fa-plus text-text-muted-light dark:text-text-muted-dark"></i>
                 </button>
-                <button 
+                <button
                     onclick="loadChatWidgetChannels(); if(chatWidgetState.currentChannelId) loadChatWidgetMessages(chatWidgetState.currentChannelId);" 
                     class="p-1.5 hover:bg-background-light dark:hover:bg-background-dark rounded transition-colors"
                     title="{{ _('Refresh') }}"
@@ -46,7 +55,7 @@
         </div>
 
         <!-- Content Area -->
-        <div class="flex-1 flex overflow-hidden">
+        <div class="flex-1 min-h-0 flex overflow-hidden">
             <!-- Channels/DMs List -->
             <div id="chatWidgetSidebar" class="w-1/3 border-r border-border-light dark:border-border-dark bg-background-light dark:bg-background-dark overflow-y-auto">
                 <div class="p-2">
@@ -54,7 +63,7 @@
                     <div id="chatWidgetChannels" class="space-y-1">
                         <!-- Channels will be loaded here -->
                     </div>
-                    
+
                     <div class="text-xs font-semibold text-text-muted-light dark:text-text-muted-dark uppercase px-2 py-1 mt-4 mb-1">{{ _('Direct Messages') }}</div>
                     <div id="chatWidgetDirectMessages" class="space-y-1">
                         <!-- Direct messages will be loaded here -->
@@ -63,7 +72,7 @@
             </div>
 
             <!-- Chat Messages Area -->
-            <div id="chatWidgetMessages" class="flex-1 flex flex-col">
+            <div id="chatWidgetMessages" class="flex-1 min-h-0 flex flex-col">
                 <!-- No channel selected state -->
                 <div id="chatWidgetEmpty" class="flex-1 flex items-center justify-center p-4 text-center text-text-muted-light dark:text-text-muted-dark">
                     <div>
@@ -73,7 +82,7 @@
                 </div>
 
                 <!-- Active channel view -->
-                <div id="chatWidgetActiveChannel" class="hidden flex-1 flex flex-col">
+                <div id="chatWidgetActiveChannel" class="hidden flex-1 min-h-0 flex flex-col">
                     <!-- Channel header -->
                     <div id="chatWidgetChannelHeader" class="p-3 border-b border-border-light dark:border-border-dark bg-card-light dark:bg-card-dark">
                         <div class="flex items-center justify-between">
@@ -81,7 +90,7 @@
                                 <h4 id="chatWidgetChannelName" class="font-semibold text-text-light dark:text-text-dark"></h4>
                                 <p id="chatWidgetChannelStatus" class="text-xs text-text-muted-light dark:text-text-muted-dark"></p>
                             </div>
-                            <a 
+                            <a
                                 id="chatWidgetViewFull"
                                 href="#"
                                 target="_blank"
@@ -93,22 +102,41 @@
                     </div>
 
                     <!-- Messages container -->
-                    <div id="chatWidgetMessagesContainer" class="flex-1 overflow-y-auto p-4 space-y-3">
+                    <div id="chatWidgetMessagesContainer" class="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
                         <!-- Messages will be loaded here -->
                     </div>
 
                     <!-- Message input -->
                     <div class="p-3 border-t border-border-light dark:border-border-dark bg-card-light dark:bg-card-dark">
+                        <div id="chatWidgetAttachmentPreview" class="hidden flex items-center gap-2 mb-2 px-2 py-1.5 bg-background-light dark:bg-background-dark rounded-lg text-xs">
+                            <i class="fas fa-paperclip text-text-muted-light dark:text-text-muted-dark"></i>
+                            <span id="chatWidgetAttachmentName" class="flex-1 truncate"></span>
+                            <button type="button" onclick="clearChatWidgetAttachment()" class="text-text-muted-light dark:text-text-muted-dark hover:text-rose-600 dark:hover:text-rose-400">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
                         <form id="chatWidgetMessageForm" class="flex gap-2">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <input 
-                                type="text" 
-                                id="chatWidgetMessageInput" 
-                                placeholder="{{ _('Type a message...') }}" 
-                                class="flex-1 form-input text-sm"
-                                autocomplete="off"
+                            <input type="file" id="chatWidgetFileInput" class="hidden" onchange="handleChatWidgetFileSelect(this.files[0])">
+                            <button
+                                type="button"
+                                onclick="document.getElementById('chatWidgetFileInput').click()"
+                                class="text-text-muted-light dark:text-text-muted-dark hover:text-primary px-1"
+                                title="{{ _('Attach file') }}"
                             >
-                            <button 
+                                <i class="fas fa-paperclip"></i>
+                            </button>
+                            <div class="flex-1 relative">
+                                <div id="chatWidgetMentionDropdown" class="hidden chat-mention-dropdown bg-card-light dark:bg-card-dark rounded-lg border border-border-light dark:border-border-dark shadow-lg py-1"></div>
+                                <input
+                                    type="text"
+                                    id="chatWidgetMessageInput"
+                                    placeholder="{{ _('Type a message...') }}"
+                                    class="w-full form-input text-sm"
+                                    autocomplete="off"
+                                >
+                            </div>
+                            <button
                                 type="submit"
                                 class="bg-primary text-white px-4 py-2 rounded-lg hover:bg-primary-dark transition-colors text-sm"
                             >
@@ -131,37 +159,35 @@ let chatWidgetState = {
     directMessages: []
 };
 
+const CHAT_WIDGET_CURRENT_USER_ID = {{ current_user.id }};
+let chatWidgetUnreadCount = 0;
+
 // Initialize chat widget
 function initChatWidget() {
-    // Load state from localStorage
+    // Load last-viewed channel from localStorage. The panel itself always starts
+    // closed on a fresh page load (isOpen is intentionally not persisted/restored).
     const savedState = localStorage.getItem('chatWidgetState');
     if (savedState) {
         try {
             const parsed = JSON.parse(savedState);
-            chatWidgetState.isOpen = parsed.isOpen || false;
             chatWidgetState.currentChannelId = parsed.currentChannelId || null;
         } catch (e) {
             console.error('Failed to load chat widget state:', e);
         }
     }
 
-    // Widget is always visible, just set initial state
+    // Ensure minimized state is shown
     const widget = document.getElementById('persistentChatWidget');
     if (widget) {
-        if (chatWidgetState.isOpen) {
-            openChatWidget();
-        } else {
-            // Ensure minimized state is shown
-            const toggle = document.getElementById('chatWidgetToggle');
-            const panel = document.getElementById('chatWidgetPanel');
-            if (toggle) toggle.classList.remove('hidden');
-            if (panel) panel.classList.add('hidden');
-        }
+        const toggle = document.getElementById('chatWidgetToggle');
+        const panel = document.getElementById('chatWidgetPanel');
+        if (toggle) toggle.classList.remove('hidden');
+        if (panel) panel.classList.add('hidden');
     }
 
     // Load channels and messages
     loadChatWidgetChannels();
-    
+
     // Set up message form handler
     const messageForm = document.getElementById('chatWidgetMessageForm');
     if (messageForm) {
@@ -172,6 +198,32 @@ function initChatWidget() {
     if (chatWidgetState.currentChannelId) {
         loadChatWidgetChannel(chatWidgetState.currentChannelId);
     }
+
+    initChatWidgetRealtime();
+    initMentionAutocompleteWidget();
+
+    // Close the panel when clicking/tapping anywhere outside of it. The "Start a
+    // Chat" user picker (#chatUserSelectorModal) is a separate top-level element
+    // (see components/chat_user_selector.html), not a descendant of this widget,
+    // so clicks inside it must not count as "outside" or the widget would close
+    // underneath it while picking a user.
+    //
+    // Registered on the CAPTURE phase (not bubble): clicking a channel/DM button
+    // re-renders the sidebar's innerHTML from inside its own onclick handler,
+    // which detaches the clicked button from the document before the event would
+    // otherwise reach a bubble-phase listener here. A detached node always fails
+    // `widget.contains(...)`, so a bubble-phase check would (wrongly) look like an
+    // outside click. Capture runs before that re-render happens, while the
+    // clicked element is still attached, avoiding the false positive.
+    document.addEventListener('click', function(event) {
+        if (!chatWidgetState.isOpen) return;
+        if (widget && widget.contains(event.target)) return;
+        const userSelectorModal = document.getElementById('chatUserSelectorModal');
+        if (userSelectorModal && userSelectorModal.contains(event.target)) return;
+        const createChannelModal = document.getElementById('createChannelModal');
+        if (createChannelModal && createChannelModal.contains(event.target)) return;
+        closeChatWidget();
+    }, true);
 }
 
 // Toggle chat widget open/closed
@@ -181,6 +233,89 @@ function toggleChatWidget() {
     } else {
         openChatWidget();
     }
+}
+
+// Real-time updates via the `user_{id}` room (same room base.html's mention
+// listener joins). Each `io()` call can end up as its own Engine.IO connection
+// rather than reliably sharing one with other inline scripts on the page, so
+// this connection explicitly (re)joins its own room on every connect/reconnect
+// instead of assuming it inherits membership from elsewhere.
+function initChatWidgetRealtime() {
+    if (typeof io === 'undefined') return;
+    const socket = io();
+    socket.on('connect', function() {
+        socket.emit('join_user_room', { user_id: CHAT_WIDGET_CURRENT_USER_ID });
+    });
+    socket.on('new_message', function(data) {
+        if (!data) return;
+
+        const isCurrentChannel = chatWidgetState.currentChannelId === data.channel_id;
+        if (isCurrentChannel) {
+            appendChatWidgetMessage(data);
+        }
+
+        // Keep the sidebar list (previews/ordering) in sync regardless of what's open
+        loadChatWidgetChannels();
+
+        // Don't badge the widget for messages the current user just sent themselves
+        if (data.user_id !== CHAT_WIDGET_CURRENT_USER_ID && !(chatWidgetState.isOpen && isCurrentChannel)) {
+            bumpChatWidgetUnreadBadge();
+        }
+    });
+}
+
+function bumpChatWidgetUnreadBadge() {
+    chatWidgetUnreadCount += 1;
+    const badge = document.getElementById('chatUnreadBadge');
+    if (badge) {
+        badge.textContent = chatWidgetUnreadCount > 9 ? '9+' : String(chatWidgetUnreadCount);
+        badge.classList.remove('hidden');
+    }
+}
+
+function clearChatWidgetUnreadBadge() {
+    chatWidgetUnreadCount = 0;
+    const badge = document.getElementById('chatUnreadBadge');
+    if (badge) badge.classList.add('hidden');
+}
+
+function appendChatWidgetMessage(message) {
+    if (!message) return;
+    const container = document.getElementById('chatWidgetMessagesContainer');
+    if (!container) return;
+    if (document.querySelector(`#chatWidgetMessagesContainer [data-message-id="${message.id}"]`)) return; // already rendered
+    if (!container.querySelector('[data-message-id]')) container.innerHTML = ''; // clear "No messages yet" placeholder
+
+    const time = window.formatUserTime
+        ? window.formatUserTime(new Date(message.created_at))
+        : new Date(message.created_at).toLocaleTimeString([], window.getUserTimeLocaleOptions ? window.getUserTimeLocaleOptions() : { hour: '2-digit', minute: '2-digit' });
+
+    const el = document.createElement('div');
+    el.className = 'flex items-start gap-2';
+    el.setAttribute('data-message-id', message.id);
+    el.innerHTML = `
+        <div class="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
+            <span class="text-primary text-xs font-semibold">${escapeHtml((message.display_name || message.username || 'U')[0].toUpperCase())}</span>
+        </div>
+        <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 mb-1">
+                <span class="font-semibold text-sm text-text-light dark:text-text-dark">${escapeHtml(message.display_name || message.username || 'Unknown')}</span>
+                <span class="text-xs text-text-muted-light dark:text-text-muted-dark">${time}</span>
+            </div>
+            <div class="text-sm text-text-light dark:text-text-dark whitespace-pre-wrap">${highlightMentions(message.message)}</div>
+            ${chatWidgetAttachmentHtml(message)}
+        </div>
+    `;
+    container.appendChild(el);
+    container.scrollTop = container.scrollHeight;
+}
+
+// message.attachment_url is an internal storage path, not a browsable URL
+// (see download_attachment() in team_chat.py) — always link through the
+// download route instead of using it directly as an href.
+function chatWidgetAttachmentHtml(message) {
+    if (!message.attachment_url || !message.attachment_filename) return '';
+    return `<div class="mt-1"><a href="/chat/channels/${message.channel_id}/messages/${message.id}/attachments/download" class="text-xs text-primary hover:underline"><i class="fas fa-paperclip mr-1"></i>${escapeHtml(message.attachment_filename)}</a></div>`;
 }
 
 // Open chat widget
@@ -193,6 +328,7 @@ function openChatWidget() {
         panel.classList.remove('hidden');
         chatWidgetState.isOpen = true;
         saveChatWidgetState();
+        clearChatWidgetUnreadBadge();
     }
 }
 
@@ -209,11 +345,11 @@ function closeChatWidget() {
     }
 }
 
-// Save widget state to localStorage
+// Save widget state to localStorage (isOpen is intentionally not persisted: the
+// panel should always start closed on a fresh page load)
 function saveChatWidgetState() {
     try {
         localStorage.setItem('chatWidgetState', JSON.stringify({
-            isOpen: chatWidgetState.isOpen,
             currentChannelId: chatWidgetState.currentChannelId
         }));
     } catch (e) {
@@ -302,9 +438,174 @@ function loadChatWidgetChannel(channelId) {
 
     // Load messages
     loadChatWidgetMessages(channelId);
-    
+
     // Update active state in sidebar
     renderChatWidgetChannels();
+
+    loadChatWidgetMentionableUsers(channelId);
+}
+
+// ---- @mention autocomplete (WhatsApp-group-style tagging) ----
+let chatWidgetMentionableUsers = [];
+
+function loadChatWidgetMentionableUsers(channelId) {
+    chatWidgetMentionableUsers = [];
+    fetch(`/api/chat/channels/${channelId}/members`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(response => response.json())
+        .then(data => {
+            chatWidgetMentionableUsers = (data.members || []).filter(m => m.user_id !== CHAT_WIDGET_CURRENT_USER_ID);
+        })
+        .catch(error => console.error('Error loading channel members for mentions:', error));
+}
+
+function initMentionAutocompleteWidget() {
+    const input = document.getElementById('chatWidgetMessageInput');
+    const dropdown = document.getElementById('chatWidgetMentionDropdown');
+    if (!input || !dropdown) return;
+
+    let activeIndex = -1;
+    let currentMatches = [];
+    let mentionStart = -1; // index of '@' within input.value
+
+    function closeDropdown() {
+        dropdown.classList.add('hidden');
+        dropdown.innerHTML = '';
+        activeIndex = -1;
+        currentMatches = [];
+        mentionStart = -1;
+    }
+
+    function renderDropdown() {
+        dropdown.innerHTML = currentMatches.map((u, i) => `
+            <button type="button" data-index="${i}" class="w-full text-left px-3 py-1.5 text-sm hover:bg-background-light dark:hover:bg-background-dark ${i === activeIndex ? 'bg-background-light dark:bg-background-dark' : ''}">
+                <span class="font-medium">${escapeHtml(u.display_name || u.username)}</span>
+                <span class="text-text-muted-light dark:text-text-muted-dark ml-1">@${escapeHtml(u.username)}</span>
+            </button>
+        `).join('');
+        dropdown.classList.remove('hidden');
+        dropdown.querySelectorAll('button[data-index]').forEach(btn => {
+            btn.addEventListener('mousedown', function(e) {
+                e.preventDefault(); // keep the input's focus/selection intact
+                selectMention(parseInt(btn.getAttribute('data-index'), 10));
+            });
+        });
+    }
+
+    function selectMention(index) {
+        const user = currentMatches[index];
+        if (!user || mentionStart === -1) return;
+        const value = input.value;
+        const cursor = input.selectionStart;
+        const before = value.slice(0, mentionStart);
+        const after = value.slice(cursor);
+        const insertion = '@' + user.username + ' ';
+        input.value = before + insertion + after;
+        const newCursor = before.length + insertion.length;
+        input.setSelectionRange(newCursor, newCursor);
+        input.focus();
+        closeDropdown();
+    }
+
+    function updateMentionState() {
+        if (!chatWidgetMentionableUsers.length) { closeDropdown(); return; }
+        const cursor = input.selectionStart;
+        const textBeforeCursor = input.value.slice(0, cursor);
+        const match = textBeforeCursor.match(/(^|\s)@(\w*)$/);
+        if (!match) {
+            closeDropdown();
+            return;
+        }
+        const query = match[2].toLowerCase();
+        mentionStart = cursor - match[2].length - 1;
+        currentMatches = chatWidgetMentionableUsers.filter(u =>
+            u.username.toLowerCase().includes(query) || (u.display_name || '').toLowerCase().includes(query)
+        ).slice(0, 8);
+        if (currentMatches.length === 0) {
+            closeDropdown();
+            return;
+        }
+        activeIndex = 0;
+        renderDropdown();
+    }
+
+    input.addEventListener('input', updateMentionState);
+    input.addEventListener('click', updateMentionState);
+    input.addEventListener('keydown', function(e) {
+        if (dropdown.classList.contains('hidden')) return;
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            activeIndex = Math.min(activeIndex + 1, currentMatches.length - 1);
+            renderDropdown();
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            activeIndex = Math.max(activeIndex - 1, 0);
+            renderDropdown();
+        } else if (e.key === 'Enter' || e.key === 'Tab') {
+            if (activeIndex >= 0) {
+                e.preventDefault();
+                selectMention(activeIndex);
+            }
+        } else if (e.key === 'Escape') {
+            closeDropdown();
+        }
+    });
+    input.addEventListener('blur', function() {
+        setTimeout(closeDropdown, 150);
+    });
+}
+
+// ---- File attachments ----
+let chatWidgetPendingAttachment = null; // {url, filename, size} from upload-attachment, attached to the next sent message
+
+function handleChatWidgetFileSelect(file) {
+    if (!file) return;
+    if (!chatWidgetState.currentChannelId) {
+        alert('{{ _("Select a channel first") }}');
+        return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+        alert('{{ _("File size exceeds 10 MB limit") }}');
+        return;
+    }
+
+    const previewEl = document.getElementById('chatWidgetAttachmentPreview');
+    const nameEl = document.getElementById('chatWidgetAttachmentName');
+    if (nameEl) nameEl.textContent = '{{ _("Uploading...") }} ' + file.name;
+    if (previewEl) previewEl.classList.remove('hidden');
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    fetch(`/chat/channels/${chatWidgetState.currentChannelId}/upload-attachment`, {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            chatWidgetPendingAttachment = data.attachment;
+            if (nameEl) nameEl.textContent = data.attachment.filename;
+        } else {
+            alert(data.error || '{{ _("Failed to upload attachment") }}');
+            clearChatWidgetAttachment();
+        }
+    })
+    .catch(error => {
+        console.error('Error uploading attachment:', error);
+        alert('{{ _("Failed to upload attachment") }}');
+        clearChatWidgetAttachment();
+    });
+}
+
+function clearChatWidgetAttachment() {
+    chatWidgetPendingAttachment = null;
+    const previewEl = document.getElementById('chatWidgetAttachmentPreview');
+    const fileInput = document.getElementById('chatWidgetFileInput');
+    if (previewEl) previewEl.classList.add('hidden');
+    if (fileInput) fileInput.value = '';
 }
 
 // Load messages for a channel
@@ -347,16 +648,17 @@ function renderChatWidgetMessages(messages) {
             ? window.formatUserTime(new Date(msg.created_at))
             : new Date(msg.created_at).toLocaleTimeString([], window.getUserTimeLocaleOptions ? window.getUserTimeLocaleOptions() : { hour: '2-digit', minute: '2-digit' });
         return `
-            <div class="flex items-start gap-2">
+            <div class="flex items-start gap-2" data-message-id="${msg.id}">
                 <div class="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
-                    <span class="text-primary text-xs font-semibold">${(msg.display_name || msg.username || 'U')[0].toUpperCase()}</span>
+                    <span class="text-primary text-xs font-semibold">${escapeHtml((msg.display_name || msg.username || 'U')[0].toUpperCase())}</span>
                 </div>
                 <div class="flex-1 min-w-0">
                     <div class="flex items-center gap-2 mb-1">
-                        <span class="font-semibold text-sm text-text-light dark:text-text-dark">${msg.display_name || msg.username || 'Unknown'}</span>
+                        <span class="font-semibold text-sm text-text-light dark:text-text-dark">${escapeHtml(msg.display_name || msg.username || 'Unknown')}</span>
                         <span class="text-xs text-text-muted-light dark:text-text-muted-dark">${time}</span>
                     </div>
-                    <div class="text-sm text-text-light dark:text-text-dark whitespace-pre-wrap">${escapeHtml(msg.message || '')}</div>
+                    <div class="text-sm text-text-light dark:text-text-dark whitespace-pre-wrap">${highlightMentions(msg.message)}</div>
+                    ${chatWidgetAttachmentHtml(msg)}
                 </div>
             </div>
         `;
@@ -369,23 +671,38 @@ function renderChatWidgetMessages(messages) {
 // Handle message submission
 function handleChatWidgetMessageSubmit(e) {
     e.preventDefault();
-    
+
     if (!chatWidgetState.currentChannelId) return;
 
     const input = document.getElementById('chatWidgetMessageInput');
-    if (!input || !input.value.trim()) return;
+    const hasAttachment = !!chatWidgetPendingAttachment;
+    if (!input || (!input.value.trim() && !hasAttachment)) return;
 
     const message = input.value.trim();
+    const attachment = chatWidgetPendingAttachment;
     input.value = '';
+    clearChatWidgetAttachment();
+
+    // interactions.js's sitewide form-submit listener disables the submit button
+    // (adds btn-loading) on every submit, expecting a normal page navigation to
+    // reset it. This form is handled via fetch() instead (no navigation), so it
+    // must be re-enabled manually once the request settles or the button stays
+    // disabled forever, silently blocking every message after the first.
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    const reenableSubmit = () => window.TimeTrackerUI?.removeLoadingState(submitBtn);
 
     // Get CSRF token from meta tag or form
-    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || 
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ||
                      document.querySelector('input[name="csrf_token"]')?.value || '';
 
     // Use FormData to send message (this endpoint handles CSRF properly)
     const formData = new FormData();
     formData.append('content', message);
     formData.append('csrf_token', csrfToken);
+    if (attachment) {
+        formData.append('attachment_data', JSON.stringify(attachment));
+        formData.append('message_type', 'file');
+    }
 
     fetch(`/chat/channels/${chatWidgetState.currentChannelId}/send-message`, {
         method: 'POST',
@@ -404,13 +721,16 @@ function handleChatWidgetMessageSubmit(e) {
         } else {
             alert(data.error || '{{ _("Failed to send message") }}');
             input.value = message; // Restore message
+            chatWidgetPendingAttachment = attachment;
         }
     })
     .catch(error => {
         console.error('Error sending message:', error);
         alert('{{ _("Failed to send message") }}');
         input.value = message; // Restore message
-    });
+        chatWidgetPendingAttachment = attachment;
+    })
+    .finally(reenableSubmit);
 }
 
 // Escape HTML helper
@@ -418,6 +738,12 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+// Mirrors the `highlight_mentions` Jinja filter (app/utils/template_filters.py)
+// and app.models.team_chat.ChatMessage.parse_mentions's `@(\w+)` pattern.
+function highlightMentions(text) {
+    return escapeHtml(text || '').replace(/(^|\s)@(\w+)/g, '$1<span class="chat-mention">@$2</span>');
 }
 
 // Initialize when DOM is ready

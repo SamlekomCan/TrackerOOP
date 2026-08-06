@@ -534,6 +534,29 @@ def register_template_filters(app):
 
         return currency_icons.get(currency_code.upper(), "fa-dollar-sign")
 
+    @app.template_filter("highlight_mentions")
+    def highlight_mentions_filter(text):
+        """Wrap @username mentions in a styled span for chat message display.
+
+        Matches app.models.team_chat.ChatMessage.parse_mentions's `@(\\w+)`
+        pattern so anything that gets a notification also gets highlighted.
+        Escapes the surrounding text itself since this returns pre-escaped
+        Markup (the mention span is the only HTML introduced).
+        """
+        import re
+
+        from markupsafe import Markup, escape
+
+        if not text:
+            return ""
+        escaped = str(escape(text))
+        highlighted = re.sub(
+            r"(^|\s)@(\w+)",
+            r'\1<span class="chat-mention">@\2</span>',
+            escaped,
+        )
+        return Markup(highlighted)
+
 
 def get_logo_base64(logo_path):
     """Convert logo file to base64 data URI for PDF embedding"""

@@ -366,8 +366,8 @@ class OutlookCalendarConnector(BaseConnector):
                     "type": "select",
                     "label": "Sync Direction",
                     "options": [
-                        {"value": "time_tracker_to_calendar", "label": "TimeTracker → Calendar (Export only)"},
-                        {"value": "calendar_to_time_tracker", "label": "Calendar → TimeTracker (Import only)"},
+                        {"value": "time_tracker_to_calendar", "label": "NDSTracker → Calendar (Export only)"},
+                        {"value": "calendar_to_time_tracker", "label": "Calendar → NDSTracker (Import only)"},
                         {"value": "bidirectional", "label": "Bidirectional (Two-way sync)"},
                     ],
                     "default": "time_tracker_to_calendar",

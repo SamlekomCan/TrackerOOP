@@ -480,8 +480,8 @@ class TrelloConnector(BaseConnector):
                     "type": "select",
                     "label": "Sync Direction",
                     "options": [
-                        {"value": "trello_to_timetracker", "label": "Trello → TimeTracker (Import only)"},
-                        {"value": "timetracker_to_trello", "label": "TimeTracker → Trello (Export only)"},
+                        {"value": "trello_to_timetracker", "label": "Trello → NDSTracker (Import only)"},
+                        {"value": "timetracker_to_trello", "label": "NDSTracker → Trello (Export only)"},
                         {"value": "bidirectional", "label": "Bidirectional (Two-way sync)"},
                     ],
                     "default": "trello_to_timetracker",
