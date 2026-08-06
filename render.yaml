@@ -1,6 +1,7 @@
-# Render Blueprint: TimeTracker Web Service + PostgreSQL
-# Uses the pre-built Docker image from GitHub Container Registry (built by cd-release / cd-development).
-# No build step: deploy the image that already works in GitHub Actions.
+# Render Blueprint: NDSTracker Web Service + PostgreSQL
+# Builds the Docker image directly from this repo's Dockerfile on every deploy
+# (this fork's own customizations -- branding, Jira widget, chat, etc. -- not
+# the upstream drytrix/timetracker image).
 
 databases:
   - name: timetracker-db
@@ -10,14 +11,12 @@ databases:
 
 services:
   - type: web
-    name: timetracker
-    runtime: image
+    name: ndstracker
+    runtime: docker
     region: oregon
-
-    image:
-      url: ghcr.io/drytrix/timetracker:latest
-      # If the image is private, add registry credentials in Render Dashboard (Settings > Registry)
-      # and set: creds: fromRegistryCreds: name: your-ghcr-credential
+    branch: Ican
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
 
     # Same as docker-compose: image default CMD runs python /app/start.py (DB wait, migrate, seed, gunicorn). start.py binds to PORT when set.
     healthCheckPath: /_health
@@ -37,6 +36,14 @@ services:
         value: local
       - key: REDIS_ENABLED
         value: "false"
+      # Lets testers create their own accounts (register on the login page)
+      # instead of you creating one for each person.
+      - key: ALLOW_SELF_REGISTER
+        value: "true"
+      # Comma-separated usernames that get admin rights automatically on
+      # registration. Register with this exact username to get admin access.
+      - key: ADMIN_USERNAMES
+        value: admin123
       # Demo mode: uncomment below and set DEMO_PASSWORD in Render Dashboard for a single-user demo
       # - key: DEMO_MODE
       #   value: "true"
